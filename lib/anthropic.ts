@@ -1,27 +1,35 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Model mapping: Haiku-equivalent = gpt-4o-mini, Sonnet-equivalent = gpt-4o
+export type ModelTier = "fast" | "smart";
+
+const MODEL_MAP: Record<ModelTier, string> = {
+  fast: "gpt-4o-mini",
+  smart: "gpt-4o",
+};
+
 export async function chatCompletion(
-  model: "claude-haiku-4-5-20251001" | "claude-sonnet-4-6-20250514",
+  tier: ModelTier,
   system: string,
   userMessage: string,
   maxTokens: number = 400
 ): Promise<string> {
-  const response = await anthropic.messages.create({
-    model,
+  const response = await openai.chat.completions.create({
+    model: MODEL_MAP[tier],
     max_tokens: maxTokens,
-    system,
-    messages: [{ role: "user", content: userMessage }],
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: userMessage },
+    ],
   });
 
-  const block = response.content[0];
-  if (block.type === "text") {
-    return block.text;
-  }
-  throw new Error("Unexpected response type from Claude");
+  const content = response.choices[0]?.message?.content;
+  if (!content) throw new Error("Empty response from OpenAI");
+  return content;
 }
 
-export { anthropic };
+export { openai };

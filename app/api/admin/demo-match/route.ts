@@ -66,7 +66,8 @@ export async function POST(req: NextRequest) {
       name: teams[0].name,
       playbook: {
         personality: "Friendly but cautious diplomat",
-        strategy: "Start with cooperation, punish betrayal, forgive after one round",
+        cooperateStrategy: "Start with cooperation, forgive after one round of punishment",
+        betrayStrategy: "Punish betrayal immediately, but only for one turn",
         secretWeapon: "",
       },
       rank: 1,
@@ -76,18 +77,17 @@ export async function POST(req: NextRequest) {
       name: teams[1].name,
       playbook: {
         personality: "Cunning strategist who talks big",
-        strategy: "Build trust then betray at the critical moment for maximum points",
+        cooperateStrategy: "Build trust in the early turns to set up a big play",
+        betrayStrategy: "Betray at the critical moment for maximum points",
         secretWeapon: "",
       },
       rank: 2,
     },
     season.id,
-    0,
-    1,
-    1,
-    2,
-    1,
-    false
+    0, // seasonNumber
+    2, // totalTeams
+    1, // pointsMultiplier
+    false // secretWeaponUnlocked
   );
 
   return NextResponse.json({ matchId: match.id, result });

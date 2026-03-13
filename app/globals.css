@@ -1,29 +1,67 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
+@import "@fontsource/ibm-plex-mono/700.css";
 
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-  --card: #141414;
-  --card-border: #262626;
-  --accent: #6366f1;
-  --accent-light: #818cf8;
-  --cooperate: #22c55e;
-  --betray: #ef4444;
-  --muted: #737373;
+  /* Warm light palette — PostHog/Bridge inspired */
+  --background: #F0EDE6;
+  --background-alt: #E8E4DA;
+  --surface: #FAF9F6;
+  --surface-hover: #F5F3EE;
+  --border: #D6D0C4;
+  --border-strong: #C4BCA9;
+
+  /* Text */
+  --foreground: #1A1815;
+  --foreground-secondary: #4A4639;
+  --muted: #8A8478;
+
+  /* Credo orange */
+  --accent: #FFA12B;
+  --accent-dark: #915100;
+  --accent-hover: #F78900;
+  --accent-light: #FFF3E6;
+  --accent-inset: #FFE5C4;
+  --accent-glow: rgba(245, 130, 33, 0.15);
+
+  /* Game colors */
+  --cooperate: #16A34A;
+  --cooperate-dark: #0B5D2A;
+  --cooperate-bg: rgba(22, 163, 74, 0.08);
+  --betray: #DC2626;
+  --betray-dark: #7F1515;
+  --betray-bg: rgba(220, 38, 38, 0.08);
+
+  /* 3D depth system — boxy, tactile */
+  --radius: 5px;
+  --radius-sm: 4px;
+  --radius-lg: 6px;
+  --depth-color: #2B1800;
+  --shadow: 0 4px 0 var(--border-strong);
+  --shadow-md: 0 6px 0 var(--border-strong);
+  --shadow-lg: 0 8px 0 var(--border-strong);
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: "Inter Variable", "Inter", -apple-system, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Smooth scrolling */
-html {
-  scroll-behavior: smooth;
+.font-mono {
+  font-family: "IBM Plex Mono", "Courier New", monospace;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar — warm tones */
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -31,6 +69,170 @@ html {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--card-border);
+  background: var(--border-strong);
   border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* Noise texture overlay for that PostHog warm feel */
+.noise-bg {
+  position: relative;
+}
+.noise-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* === CARD — 3D boxy style === */
+.card {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.1s, transform 0.1s, border-color 0.15s;
+  position: relative;
+}
+.card:hover {
+  border-color: var(--border-strong);
+}
+.card-push:active {
+  transform: translateY(4px);
+  box-shadow: 0 0px 0 var(--border-strong);
+}
+
+/* === BUTTONS — 3D push style like the reference === */
+.btn-accent {
+  display: inline-block;
+  position: relative;
+  background-color: var(--accent);
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+  text-align: center;
+  padding: 12px 24px;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius);
+  box-shadow: inset 0 1px 0 var(--accent-inset), 0 6px 0 var(--accent-dark);
+  text-shadow: 0px 1px 0px rgba(0,0,0,0.2);
+  transition: all 0.08s ease;
+}
+.btn-accent:hover {
+  background-color: var(--accent-hover);
+}
+.btn-accent:active {
+  top: 6px;
+  background-color: var(--accent-hover);
+  box-shadow: inset 0 1px 0 var(--accent-inset), inset 0 -2px 0 var(--accent-dark);
+}
+.btn-accent:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  top: 0;
+  box-shadow: inset 0 1px 0 var(--accent-inset), 0 6px 0 var(--accent-dark);
+}
+
+/* Ghost button — 3D style */
+.btn-ghost {
+  display: inline-block;
+  position: relative;
+  background: var(--surface);
+  color: var(--foreground);
+  font-weight: 600;
+  font-size: 14px;
+  text-align: center;
+  padding: 12px 24px;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 0 var(--border-strong);
+  transition: all 0.08s ease;
+}
+.btn-ghost:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+.btn-ghost:active {
+  top: 4px;
+  box-shadow: 0 0px 0 var(--border-strong);
+}
+
+/* Cooperate button — 3D */
+.btn-cooperate {
+  display: inline-block;
+  position: relative;
+  background-color: var(--cooperate);
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 12px 24px;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 6px 0 var(--cooperate-dark);
+  text-shadow: 0px 1px 0px rgba(0,0,0,0.15);
+  transition: all 0.08s ease;
+}
+.btn-cooperate:active {
+  top: 6px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -2px 0 var(--cooperate-dark);
+}
+
+/* === Animations === */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 4px 0 var(--accent-dark), 0 0 0 0 rgba(245, 130, 33, 0); }
+  50% { box-shadow: 0 4px 0 var(--accent-dark), 0 0 24px 4px rgba(245, 130, 33, 0.25); }
+}
+
+@keyframes shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+@keyframes soundbar {
+  0%, 100% { height: 4px; }
+  50% { height: 16px; }
+}
+
+/* Projector-friendly: large text class */
+.projector-heading {
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.projector-subheading {
+  font-size: clamp(1.25rem, 2.5vw, 2rem);
+  font-weight: 500;
+  color: var(--foreground-secondary);
+}
+
+/* Tabular numbers for scores */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Input fields — boxy with depth */
+input, textarea {
+  border-radius: var(--radius) !important;
+  border: 2px solid var(--border) !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.04) !important;
+}
+input:focus, textarea:focus {
+  border-color: var(--accent) !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.04), 0 0 0 2px var(--accent-glow) !important;
 }

@@ -1,24 +1,35 @@
 -- Agent Arena: Iterated Prisoner's Dilemma with Talking LLM Agents
--- Database schema
 
--- Teams
-create table teams (
+-- Tournaments (admin creates, teams join via code)
+create table tournaments (
   id uuid primary key default gen_random_uuid(),
-  name text not null unique,
-  color text not null default '#6366f1',
+  name text not null,
   join_code text not null unique,
+  status text not null default 'lobby' check (status in ('lobby', 'active', 'completed')),
   created_at timestamptz not null default now()
 );
 
--- Seasons
+-- Teams (self-register by joining a tournament)
+create table teams (
+  id uuid primary key default gen_random_uuid(),
+  tournament_id uuid not null references tournaments(id) on delete cascade,
+  name text not null,
+  color text not null default '#6366f1',
+  created_at timestamptz not null default now(),
+  unique (tournament_id, name)
+);
+
+-- Seasons (per tournament)
 create table seasons (
   id serial primary key,
-  number int not null unique,
+  tournament_id uuid not null references tournaments(id) on delete cascade,
+  number int not null,
   status text not null default 'pending' check (status in ('pending', 'building', 'running', 'tweaking', 'completed')),
   current_round int not null default 0,
   total_rounds int not null default 5,
   points_multiplier int not null default 1,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  unique (tournament_id, number)
 );
 
 -- Playbooks (one per team per season)
@@ -100,8 +111,10 @@ create table leaderboard (
 alter publication supabase_realtime add table leaderboard;
 alter publication supabase_realtime add table matches;
 alter publication supabase_realtime add table messages;
+alter publication supabase_realtime add table teams;
 
 -- RLS policies (permissive for game context)
+alter table tournaments enable row level security;
 alter table teams enable row level security;
 alter table seasons enable row level security;
 alter table playbooks enable row level security;
@@ -110,14 +123,14 @@ alter table messages enable row level security;
 alter table encounter_history enable row level security;
 alter table leaderboard enable row level security;
 
--- Everyone can read most tables
-create policy "Public read teams" on teams for select using (true);
-create policy "Public read seasons" on seasons for select using (true);
-create policy "Public read matches" on matches for select using (true);
-create policy "Public read messages" on messages for select using (true);
-create policy "Public read leaderboard" on leaderboard for select using (true);
-create policy "Public read encounter_history" on encounter_history for select using (true);
-create policy "Public read playbooks" on playbooks for select using (true);
+-- Everyone can read all tables
+create policy "Public read" on tournaments for select using (true);
+create policy "Public read" on teams for select using (true);
+create policy "Public read" on seasons for select using (true);
+create policy "Public read" on playbooks for select using (true);
+create policy "Public read" on matches for select using (true);
+create policy "Public read" on messages for select using (true);
+create policy "Public read" on encounter_history for select using (true);
+create policy "Public read" on leaderboard for select using (true);
 
 -- Service role handles all writes (via API routes)
--- No insert/update/delete policies for anon — all mutations go through server
