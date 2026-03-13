@@ -31,18 +31,21 @@ const supabase = createClient(
     tournament_id: tournament.id,
     name: "Smooth Criminal",
     color: "#ef4444",
+    join_code: "SMTH1",
   }).select().single();
 
   const { data: team2 } = await supabase.from("teams").insert({
     tournament_id: tournament.id,
     name: "Professor Chaos",
     color: "#22c55e",
+    join_code: "PROF1",
   }).select().single();
 
   const { data: team3 } = await supabase.from("teams").insert({
     tournament_id: tournament.id,
     name: "Grandma Ruthless",
     color: "#8b5cf6",
+    join_code: "GRAN1",
   }).select().single();
 
   // Create season (running)
