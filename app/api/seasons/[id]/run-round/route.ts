@@ -17,6 +17,13 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (!process.env.OPENAI_API_KEY) {
+    return NextResponse.json(
+      { error: "OPENAI_API_KEY not configured. Set it in Vercel environment variables." },
+      { status: 500 }
+    );
+  }
+
   const supabase = createServerClient();
 
   // Get season

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Leaderboard from "@/components/Leaderboard";
 import ScoreMatrix from "@/components/ScoreMatrix";
 import RoundHighlights from "@/components/RoundHighlights";
@@ -74,6 +74,8 @@ export default function AdminPage() {
     "x-admin-secret": secret,
   };
 
+  const phaseLockedRef = useRef<{ phase: string; until: number } | null>(null);
+
   const loadState = useCallback(async () => {
     if (!activeTournament) return;
     try {
@@ -84,9 +86,35 @@ export default function AdminPage() {
       const data = await res.json();
       if (data.tournaments) setTournaments(data.tournaments);
       if (data.teams) setTeams(data.teams);
-      if (data.seasons) setSeasons(data.seasons);
       if (data.readiness) setReadiness(data.readiness);
       if (data.matchProgress !== undefined) setMatchProgress(data.matchProgress);
+
+      // Respect phase lock — don't let polling skip intermediate phases
+      if (data.seasons && phaseLockedRef.current) {
+        const lock = phaseLockedRef.current;
+        const serverSeason = data.seasons.find((s: Season) => s.status === "running");
+        if (serverSeason && serverSeason.round_status !== lock.phase && Date.now() < lock.until) {
+          // Server moved past our locked phase — apply new phase with its own minimum display time
+          const newPhase = serverSeason.round_status;
+          const phaseOrder = ["running_matches", "generating_highlights", "showing_highlights"];
+          const lockIdx = phaseOrder.indexOf(lock.phase);
+          const serverIdx = phaseOrder.indexOf(newPhase);
+          if (serverIdx > lockIdx) {
+            // Show the next phase in sequence, not the server's latest
+            const nextPhase = phaseOrder[lockIdx + 1];
+            phaseLockedRef.current = { phase: nextPhase, until: Date.now() + 3000 };
+            setSeasons(data.seasons.map((s: Season) =>
+              s.status === "running" ? { ...s, round_status: nextPhase } : s
+            ));
+            return;
+          }
+        }
+        if (Date.now() >= lock.until) {
+          phaseLockedRef.current = null;
+        }
+      }
+
+      if (data.seasons) setSeasons(data.seasons);
     } catch {}
   }, [activeTournament, secret]);
 
@@ -179,17 +207,8 @@ export default function AdminPage() {
   const runRound = async () => {
     if (!activeSeason || !allReady) return;
     setRoundError("");
-    fetch(`/api/seasons/${activeSeason.id}/run-round`, {
-      method: "POST",
-      headers,
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const data = await res.json();
-          setRoundError(data.error || "Round failed");
-        }
-      })
-      .catch(() => setRoundError("Network error"));
+
+    // Optimistic update + lock this phase for at least 3s
     setSeasons((prev) =>
       prev.map((s) =>
         s.id === activeSeason.id
@@ -197,6 +216,23 @@ export default function AdminPage() {
           : s
       )
     );
+    phaseLockedRef.current = { phase: "running_matches", until: Date.now() + 3000 };
+
+    try {
+      const res = await fetch(`/api/seasons/${activeSeason.id}/run-round`, {
+        method: "POST",
+        headers,
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setRoundError(data.error || "Round failed");
+        // Revert optimistic update on error
+        loadState();
+      }
+    } catch {
+      setRoundError("Network error");
+      loadState();
+    }
   };
 
   const dismissHighlights = async () => {

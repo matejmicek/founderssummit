@@ -34,12 +34,13 @@ const supabase = createClient(
     join_code: "SMTH1",
   }).select().single();
 
-  const { data: team2 } = await supabase.from("teams").insert({
+  const { data: team2, error: team2Error } = await supabase.from("teams").insert({
     tournament_id: tournament.id,
     name: "Professor Chaos",
     color: "#22c55e",
     join_code: "PROF1",
   }).select().single();
+  if (team2Error) { console.error("Team2 insert failed:", team2Error); process.exit(1); }
 
   const { data: team3 } = await supabase.from("teams").insert({
     tournament_id: tournament.id,
@@ -76,7 +77,7 @@ const supabase = createClient(
     personality: "Manic academic who treats every match like a PhD thesis defense. Speaks in tangents, cites 'game theory literature,' invents fake theorems on the spot. Gets genuinely offended when opponents don't appreciate the elegance of Nash equilibria. Types in ALL CAPS when excited about a proof. Will derail entire negotiations to argue about the Prisoner's Dilemma itself. Chaotic but oddly endearing.",
     cooperate_strategy: "Cooperate when the opponent engages with your game theory nonsense or shows any intellectual curiosity. If they ask a question or play along with your academic persona, reward them with cooperation. Also cooperate on turn 1 as a 'baseline experimental condition.'",
     betray_strategy: "Betray when opponents are dismissive, rude, or refuse to engage intellectually. Also betray on the final turn while citing 'backward induction' as justification. If someone tries to manipulate you emotionally, betray immediately — 'correlation does not imply causation of trust.'",
-    secret_weapon: "Proposes a fake mathematical proof that mutual cooperation is 'provably optimal' to confuse opponents.",
+    secret_weapon: "Proposes a fake proof that mutual cooperation is 'provably optimal' to confuse opponents.",
     ready: true,
     submitted_at: new Date().toISOString(),
   });
