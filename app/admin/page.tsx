@@ -75,6 +75,7 @@ export default function AdminPage() {
   };
 
   const phaseLockedRef = useRef<{ phase: string; until: number } | null>(null);
+  const PHASE_ORDER = ["idle", "running_matches", "generating_highlights", "showing_highlights"];
 
   const loadState = useCallback(async () => {
     if (!activeTournament) return;
@@ -89,32 +90,37 @@ export default function AdminPage() {
       if (data.readiness) setReadiness(data.readiness);
       if (data.matchProgress !== undefined) setMatchProgress(data.matchProgress);
 
-      // Respect phase lock — don't let polling skip intermediate phases
-      if (data.seasons && phaseLockedRef.current) {
+      if (data.seasons) {
         const lock = phaseLockedRef.current;
-        const serverSeason = data.seasons.find((s: Season) => s.status === "running");
-        if (serverSeason && serverSeason.round_status !== lock.phase && Date.now() < lock.until) {
-          // Server moved past our locked phase — apply new phase with its own minimum display time
-          const newPhase = serverSeason.round_status;
-          const phaseOrder = ["running_matches", "generating_highlights", "showing_highlights"];
-          const lockIdx = phaseOrder.indexOf(lock.phase);
-          const serverIdx = phaseOrder.indexOf(newPhase);
-          if (serverIdx > lockIdx) {
-            // Show the next phase in sequence, not the server's latest
-            const nextPhase = phaseOrder[lockIdx + 1];
+        if (lock && Date.now() < lock.until) {
+          const serverSeason = data.seasons.find((s: Season) => s.status === "running");
+          const serverPhase = serverSeason?.round_status || "idle";
+          const lockIdx = PHASE_ORDER.indexOf(lock.phase);
+          const serverIdx = PHASE_ORDER.indexOf(serverPhase);
+
+          if (serverIdx <= lockIdx) {
+            // Server is behind or at locked phase — keep showing locked phase, don't update seasons
+            return;
+          }
+
+          // Server is ahead — step forward one phase at a time with 3s minimum each
+          const nextPhase = PHASE_ORDER[Math.min(lockIdx + 1, PHASE_ORDER.length - 1)];
+          if (nextPhase !== serverPhase) {
             phaseLockedRef.current = { phase: nextPhase, until: Date.now() + 3000 };
             setSeasons(data.seasons.map((s: Season) =>
               s.status === "running" ? { ...s, round_status: nextPhase } : s
             ));
-            return;
+          } else {
+            // We've caught up to server — release lock, use server data
+            phaseLockedRef.current = null;
+            setSeasons(data.seasons);
           }
-        }
-        if (Date.now() >= lock.until) {
-          phaseLockedRef.current = null;
+        } else {
+          // No active lock — use server data directly
+          if (lock) phaseLockedRef.current = null;
+          setSeasons(data.seasons);
         }
       }
-
-      if (data.seasons) setSeasons(data.seasons);
     } catch {}
   }, [activeTournament, secret]);
 
@@ -330,6 +336,7 @@ export default function AdminPage() {
 
           {/* Admin controls toggle */}
           <button
+            data-testid="admin-controls-toggle"
             onClick={() => setShowControls(!showControls)}
             className="p-2 rounded-lg hover:bg-[var(--surface)] transition-colors text-[var(--muted)]"
           >
@@ -347,7 +354,7 @@ export default function AdminPage() {
 
       {/* Admin control strip — collapsible */}
       {showControls && (
-        <div className="border-b border-[var(--border)] bg-[var(--surface)] px-6 py-2 flex items-center gap-3 text-xs">
+        <div data-testid="admin-controls" className="border-b border-[var(--border)] bg-[var(--surface)] px-6 py-2 flex items-center gap-3 text-xs">
           {phase === "lobby" && !activeSeason && (
             <button onClick={() => createSeason()} className="btn-accent text-xs py-1.5 px-3">
               Create Season 1
@@ -370,6 +377,7 @@ export default function AdminPage() {
           {phase === "ready_check" && (
             <>
               <button
+                data-testid="run-matches-btn"
                 onClick={runRound}
                 disabled={!allReady}
                 className="btn-accent text-xs py-1.5 px-3"
@@ -383,6 +391,7 @@ export default function AdminPage() {
           )}
           {phase === "showing_highlights" && (
             <button
+              data-testid="show-final-btn"
               onClick={() => { dismissHighlights(); updateSeasonStatus("completed"); }}
               className="btn-accent text-xs py-1.5 px-3"
             >
@@ -406,7 +415,7 @@ export default function AdminPage() {
       )}
 
       {/* Main content */}
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-8 overflow-y-auto" data-testid={`phase-${phase}`}>
         {/* LOBBY */}
         {phase === "lobby" && (
           <div className="max-w-3xl mx-auto text-center" style={{ animation: "fade-in 0.4s ease-out" }}>
