@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { getAllMatchups } from "@/lib/engine/matchup";
 import { executeMatch, refreshLeaderboard } from "@/lib/engine/executor";
 import { generateHighlights, generateTeamHighlights, getHighlightData, getTeamHighlightData } from "@/lib/engine/highlights";
 import { generateVoiceoversForHighlights } from "@/lib/engine/voiceover";
 
-export const maxDuration = 300; // 5 min — 15 matches × 3 turns each
+export const maxDuration = 300; // 5 min
+
+const MATCH_BATCH_SIZE = 10; // Process 10 matches concurrently
 
 export async function POST(
   req: NextRequest,
@@ -79,17 +82,56 @@ export async function POST(
     );
   }
 
-  // === All validations passed. Start the matches. ===
+  // === All validations passed. Create matches and return immediately. ===
+
+  // Generate ALL matchups (every team vs every other team)
+  const teamIds = teams.map((t) => t.id);
+  const matchups = getAllMatchups(teamIds);
+
+  // Create all match records at once
+  const matchInserts = matchups.map((m) => ({
+    season_id: parseInt(seasonId),
+    round: 1,
+    team_a_id: m.teamAId,
+    team_b_id: m.teamBId,
+    status: "pending" as const,
+  }));
+
+  const { data: matchRecords, error: matchError } = await supabase
+    .from("matches")
+    .insert(matchInserts)
+    .select();
+
+  if (matchError || !matchRecords) {
+    return NextResponse.json({ error: "Failed to create matches" }, { status: 500 });
+  }
+
   await supabase
     .from("seasons")
     .update({ current_round: 1, round_status: "running_matches" })
     .eq("id", seasonId);
 
-  try {
-    // Generate ALL matchups (every team vs every other team)
-    const teamIds = teams.map((t) => t.id);
-    const matchups = getAllMatchups(teamIds);
+  // Return immediately — process matches in the background
+  after(async () => {
+    await processRound(seasonId, season, teams, matchRecords);
+  });
 
+  return NextResponse.json({
+    started: true,
+    matchesTotal: matchRecords.length,
+    teamsCount: teams.length,
+  });
+}
+
+async function processRound(
+  seasonId: string,
+  season: { number: number; points_multiplier: number; tournament_id: string },
+  teams: { id: string; name: string; color: string }[],
+  matchRecords: { id: string; team_a_id: string; team_b_id: string }[]
+) {
+  const supabase = createServerClient();
+
+  try {
     // Get current leaderboard for ranks
     const { data: leaderboard } = await supabase
       .from("leaderboard")
@@ -127,77 +169,60 @@ export async function POST(
       secretWeapon: "",
     };
 
-    // Create all match records at once
-    const matchInserts = matchups.map((m) => ({
-      season_id: parseInt(seasonId),
-      round: 1,
-      team_a_id: m.teamAId,
-      team_b_id: m.teamBId,
-      status: "pending" as const,
-    }));
-
-    const { data: matchRecords, error: matchError } = await supabase
-      .from("matches")
-      .insert(matchInserts)
-      .select();
-
-    if (matchError || !matchRecords) {
-      throw new Error("Failed to create matches");
-    }
-
     const secretWeaponUnlocked = season.number >= 2;
     const teamMap: Record<string, { id: string; name: string }> = {};
     for (const t of teams) {
       teamMap[t.id] = t;
     }
 
-    // Execute all matches in parallel
-    const results = await Promise.allSettled(
-      matchRecords.map((match) => {
-        const teamA = teamMap[match.team_a_id];
-        const teamB = teamMap[match.team_b_id];
-        return executeMatch(
-          match.id,
-          {
-            id: teamA.id,
-            name: teamA.name,
-            playbook: playbookMap[teamA.id] || defaultPlaybook,
-            rank: rankMap[teamA.id] || teams.length,
-          },
-          {
-            id: teamB.id,
-            name: teamB.name,
-            playbook: playbookMap[teamB.id] || defaultPlaybook,
-            rank: rankMap[teamB.id] || teams.length,
-          },
-          parseInt(seasonId),
-          season.number,
-          teams.length,
-          season.points_multiplier,
-          secretWeaponUnlocked
-        );
-      })
-    );
+    // Process matches in batches
+    for (let i = 0; i < matchRecords.length; i += MATCH_BATCH_SIZE) {
+      const batch = matchRecords.slice(i, i + MATCH_BATCH_SIZE);
 
-    // Mark failed matches
-    for (let i = 0; i < results.length; i++) {
-      if (results[i].status === "rejected") {
-        const reason = (results[i] as PromiseRejectedResult).reason;
-        await supabase
-          .from("matches")
-          .update({
-            status: "error",
-            error_message: String(reason).slice(0, 500),
-          })
-          .eq("id", matchRecords[i].id);
+      const results = await Promise.allSettled(
+        batch.map((match) => {
+          const teamA = teamMap[match.team_a_id];
+          const teamB = teamMap[match.team_b_id];
+          return executeMatch(
+            match.id,
+            {
+              id: teamA.id,
+              name: teamA.name,
+              playbook: playbookMap[teamA.id] || defaultPlaybook,
+              rank: rankMap[teamA.id] || teams.length,
+            },
+            {
+              id: teamB.id,
+              name: teamB.name,
+              playbook: playbookMap[teamB.id] || defaultPlaybook,
+              rank: rankMap[teamB.id] || teams.length,
+            },
+            parseInt(seasonId),
+            season.number,
+            teams.length,
+            season.points_multiplier,
+            secretWeaponUnlocked
+          );
+        })
+      );
+
+      // Mark failed matches
+      for (let j = 0; j < results.length; j++) {
+        if (results[j].status === "rejected") {
+          const reason = (results[j] as PromiseRejectedResult).reason;
+          await supabase
+            .from("matches")
+            .update({
+              status: "error",
+              error_message: String(reason).slice(0, 500),
+            })
+            .eq("id", batch[j].id);
+        }
       }
     }
 
     // Refresh leaderboard
     await refreshLeaderboard(parseInt(seasonId));
-
-    const completed = results.filter((r) => r.status === "fulfilled").length;
-    const failed = results.filter((r) => r.status === "rejected").length;
 
     // === PHASE 2: generating_highlights ===
     await supabase
@@ -212,7 +237,7 @@ export async function POST(
       console.error("Highlight generation failed:", e);
     }
 
-    // === PHASE 2.5: generating voiceovers per highlight ===
+    // Generate voiceovers per highlight
     try {
       const highlightData = await getHighlightData(parseInt(seasonId), 1);
       await generateVoiceoversForHighlights(highlightData);
@@ -220,10 +245,9 @@ export async function POST(
       console.error("Voiceover generation failed:", e);
     }
 
-    // === PHASE 2.7: generate team-specific highlights (2 per team) ===
-    let teamHighlightsCount = 0;
+    // Generate team-specific highlights
     try {
-      teamHighlightsCount = await generateTeamHighlights(parseInt(seasonId), 1);
+      await generateTeamHighlights(parseInt(seasonId), 1);
     } catch (e) {
       console.error("Team highlight generation failed:", e);
     }
@@ -248,23 +272,11 @@ export async function POST(
       .update({ ready: false })
       .eq("season_id", parseInt(seasonId));
 
-    return NextResponse.json({
-      matchesTotal: matchRecords.length,
-      matchesCompleted: completed,
-      matchesFailed: failed,
-      highlightsGenerated: highlightsCount,
-      teamHighlightsGenerated: teamHighlightsCount,
-    });
   } catch (error) {
     console.error("Round execution failed:", error);
     await supabase
       .from("seasons")
       .update({ round_status: "idle", current_round: 0 })
       .eq("id", seasonId);
-
-    return NextResponse.json(
-      { error: `Round failed: ${error instanceof Error ? error.message : "Unknown error"}` },
-      { status: 500 }
-    );
   }
 }

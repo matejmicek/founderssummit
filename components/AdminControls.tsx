@@ -166,7 +166,9 @@ export default function AdminControls({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setMessage(
-        `Round ${data.round}: ${data.matchesCompleted} matches, ${data.highlightsGenerated} highlights`
+        data.started
+          ? `Running ${data.matchesTotal} matches...`
+          : `Round ${data.round}: ${data.matchesCompleted} matches, ${data.highlightsGenerated} highlights`
       );
       if (activeTournament) loadState(activeTournament.id);
     } catch (e) {
