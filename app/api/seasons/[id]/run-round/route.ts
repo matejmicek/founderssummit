@@ -84,6 +84,20 @@ export async function POST(
 
   // === All validations passed. Create matches and return immediately. ===
 
+  // Guard against double-submit: if matches already exist for this season's round, reject
+  const { count: existingCount } = await supabase
+    .from("matches")
+    .select("id", { count: "exact", head: true })
+    .eq("season_id", parseInt(seasonId))
+    .eq("round", 1);
+
+  if (existingCount && existingCount > 0) {
+    return NextResponse.json(
+      { error: "Matches already created for this round" },
+      { status: 409 }
+    );
+  }
+
   // Generate ALL matchups (every team vs every other team)
   const teamIds = teams.map((t) => t.id);
   const matchups = getAllMatchups(teamIds);
