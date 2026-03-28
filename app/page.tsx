@@ -35,7 +35,7 @@ export default function LandingPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create team");
 
-      router.push("/team");
+      router.push(`/team/${data.team.join_code}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -60,7 +60,7 @@ export default function LandingPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to join team");
 
-      router.push("/team");
+      router.push(`/team/${data.team.join_code}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {

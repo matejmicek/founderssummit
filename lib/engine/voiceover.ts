@@ -46,7 +46,7 @@ export async function generateVoiceoversForHighlights(
 }
 
 async function generateScript(h: HighlightForVoiceover): Promise<string> {
-  const systemPrompt = `You are a charismatic, quick-witted sports commentator narrating a Prisoner's Dilemma match LIVE to a hyped crowd of 70 people. Think UFC announcer meets stand-up comedian — you're having the time of your life.
+  const systemPrompt = `You are a charismatic match analyst narrating a Prisoner's Dilemma match to the competing teams — about 70 people who need to learn from what happened so they can improve their agents.
 
 This will be read by ElevenLabs v3 TTS. Use Audio Tags in square brackets to control the performance:
 - [excited] [shouting] for hype moments
@@ -57,24 +57,26 @@ This will be read by ElevenLabs v3 TTS. Use Audio Tags in square brackets to con
 - [sarcastic] [awe] [angry] for tone shifts
 
 Rules:
-- 30-40 seconds of speech (~80 words)
-- Tell the STORY of the match across all 3 turns — the arc, the twists, the payoff
-- Name the teams, quote funny things they said, call out specific moves
-- Build to a climax — start chill, escalate, land a killer closer
-- Use Audio Tags generously to ride the emotional rollercoaster
-- Be genuinely funny, not corny. Roast bad decisions. Celebrate big plays.`;
+- 40-50 seconds of speech (~100-120 words)
+- Walk through the match turn by turn — what each agent said, how they played each other
+- Call out the specific tactics: "They opened with a trust play, promised cooperation, then flipped on turn two"
+- Highlight the KEY moment — the turn where someone got outplayed, the promise that sealed the deal, the bluff that failed
+- Make teams think "I need to update my prompt to handle THAT"
+- Name the teams. Quote the funniest or most devastating lines.
+- Be entertaining but educational — roast bad plays, celebrate smart ones
+- Use Audio Tags to ride the emotional beats`;
 
-  const userPrompt = `Narrate this match highlight:
+  const userPrompt = `Break down this match for the competing teams:
 
 "${h.title}" (${h.highlight_type})
 ${h.teamAName} vs ${h.teamBName}
 Final score: ${h.teamAName} +${h.teamAScore}, ${h.teamBName} +${h.teamBScore}
 
-Here's what went down: ${h.commentary}
+Tactical breakdown: ${h.commentary}
 
-Give me that fire commentary. Build the tension across the turns, hit the punchline, leave the crowd wanting more.`;
+Narrate this turn by turn. Make the teams feel the dynamics — who outplayed who and how. End with something that makes everyone want to go rewrite their prompt.`;
 
-  return await chatCompletion("smart", systemPrompt, userPrompt, 300);
+  return await chatCompletion("smart", systemPrompt, userPrompt, 400);
 }
 
 async function textToSpeech(script: string): Promise<string> {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Save, Check, Lock, Users, Wifi, WifiOff } from "lucide-react";
+import { Check, Lock, Users, Wifi, WifiOff, CloudCheck } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
 
 interface Props {
@@ -19,11 +19,9 @@ export default function PlaybookEditor({
   const [cooperateStrategy, setCooperateStrategy] = useState("");
   const [betrayStrategy, setBetrayStrategy] = useState("");
   const [secretWeapon, setSecretWeapon] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [ready, setReady] = useState(false);
   const [togglingReady, setTogglingReady] = useState(false);
-  const [error, setError] = useState("");
+  const [isSynced, setIsSynced] = useState(true);
   const [syncStatus, setSyncStatus] = useState<"connected" | "disconnected" | "syncing">("disconnected");
   const [remoteUpdate, setRemoteUpdate] = useState(false);
 
@@ -52,6 +50,7 @@ export default function PlaybookEditor({
           setBetrayStrategy(data.playbook.betray_strategy || "");
           setSecretWeapon(data.playbook.secret_weapon || "");
           setReady(data.playbook.ready || false);
+          setIsSynced(true);
           lastSaveTimestamp.current = data.playbook.submitted_at || null;
         }
       })
@@ -89,6 +88,8 @@ export default function PlaybookEditor({
           setBetrayStrategy(String(row.betray_strategy || ""));
           setSecretWeapon(String(row.secret_weapon || ""));
           setReady(Boolean(row.ready));
+          setIsSynced(true);
+          isDirty.current = false;
           lastSaveTimestamp.current = String(row.submitted_at || "");
 
           // Flash the "teammate updated" indicator
@@ -115,6 +116,7 @@ export default function PlaybookEditor({
     if (!seasonId) return;
 
     isDirty.current = true;
+    setIsSynced(false);
 
     if (autoSaveTimer.current) {
       clearTimeout(autoSaveTimer.current);
@@ -135,7 +137,7 @@ export default function PlaybookEditor({
   }, [personality, cooperateStrategy, betrayStrategy, secretWeapon, seasonId]);
 
   const autoSave = async () => {
-    if (!seasonId || saving) return;
+    if (!seasonId) return;
 
     const fields = fieldsRef.current;
     setSyncStatus("syncing");
@@ -157,6 +159,7 @@ export default function PlaybookEditor({
       if (res.ok) {
         isDirty.current = false;
         setReady(false);
+        setIsSynced(true);
         setSyncStatus("connected");
       } else {
         isLocalSave.current = false;
@@ -167,44 +170,6 @@ export default function PlaybookEditor({
       setSyncStatus("connected");
     }
   };
-
-  // Manual save (still available)
-  const save = useCallback(async () => {
-    if (!seasonId) return;
-    setSaving(true);
-    setError("");
-    setSaved(false);
-    isLocalSave.current = true;
-
-    try {
-      const res = await fetch("/api/playbooks", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          personality,
-          cooperateStrategy,
-          betrayStrategy,
-          secretWeapon,
-          seasonId,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        isLocalSave.current = false;
-        throw new Error(data.error || "Failed to save");
-      }
-
-      isDirty.current = false;
-      setReady(false);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save");
-    } finally {
-      setSaving(false);
-    }
-  }, [personality, cooperateStrategy, betrayStrategy, secretWeapon, seasonId]);
 
   const toggleReady = useCallback(async () => {
     if (!seasonId) return;
@@ -332,20 +297,11 @@ export default function PlaybookEditor({
         />
       </div>
 
-      {/* Action buttons */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <button
-          onClick={save}
-          disabled={saving || !seasonId}
-          className="btn-accent text-sm flex items-center gap-2"
-        >
-          <Save size={14} />
-          {saving ? "Saving..." : "Save Playbook"}
-        </button>
-
+      {/* Action area */}
+      <div className="flex items-center justify-between">
         <button
           onClick={toggleReady}
-          disabled={togglingReady || !seasonId || !hasContent}
+          disabled={togglingReady || !seasonId || !hasContent || !isSynced}
           className={`text-sm font-semibold rounded px-5 py-2.5 transition-all flex items-center gap-2 ${
             ready
               ? "bg-[var(--cooperate)] text-white shadow-sm"
@@ -356,12 +312,18 @@ export default function PlaybookEditor({
           {ready ? "Ready!" : "Mark Ready"}
         </button>
 
-        {saved && (
-          <span className="text-[var(--cooperate)] text-sm font-medium">Saved!</span>
-        )}
-        {error && (
-          <span className="text-[var(--betray)] text-sm">{error}</span>
-        )}
+        <div className="flex items-center gap-1.5 text-xs font-mono">
+          {isSynced ? (
+            <span className="flex items-center gap-1 text-[var(--cooperate)]">
+              <CloudCheck size={14} />
+              Saved
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-[var(--muted)] animate-pulse">
+              Saving...
+            </span>
+          )}
+        </div>
       </div>
 
       {ready && (

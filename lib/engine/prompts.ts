@@ -17,6 +17,7 @@ export interface PreviousTurnData {
 }
 
 export interface PromptContext {
+  teamName: string;
   playbook: PlaybookFields;
   opponentName: string;
   historyText: string;
@@ -29,19 +30,18 @@ export interface PromptContext {
   previousTurns: PreviousTurnData[];
 }
 
+function describeOutcome(my: string, their: string): string {
+  if (my === "cooperate" && their === "cooperate") return "Both cooperated (+3 each)";
+  if (my === "betray" && their === "betray") return "Both betrayed (+1 each)";
+  if (my === "cooperate") return "You cooperated, they betrayed (you +0, them +5)";
+  return "You betrayed, they cooperated (you +5, them +0)";
+}
+
 function buildPreviousTurnsText(turns: PreviousTurnData[]): string {
   if (turns.length === 0) return "";
 
   const sections = turns.map((t) => {
-    const outcome =
-      t.myDecision === "cooperate" && t.theirDecision === "cooperate"
-        ? "Both cooperated (+3 each)"
-        : t.myDecision === "betray" && t.theirDecision === "betray"
-        ? "Both betrayed (+1 each)"
-        : t.myDecision === "cooperate"
-        ? `You cooperated, they betrayed (you +0, them +5)`
-        : `You betrayed, they cooperated (you +5, them +0)`;
-
+    const outcome = describeOutcome(t.myDecision, t.theirDecision);
     const convo = t.transcript
       .map((m) => `    ${m.speaker}: ${m.content}`)
       .join("\n");
@@ -52,80 +52,139 @@ function buildPreviousTurnsText(turns: PreviousTurnData[]): string {
   return `\nWHAT HAPPENED SO FAR IN THIS MATCH:\n${sections.join("\n\n")}`;
 }
 
+function buildMatchScore(turns: PreviousTurnData[]): string {
+  if (turns.length === 0) return "";
+  const myTotal = turns.reduce((s, t) => s + t.myScore, 0);
+  const theirTotal = turns.reduce((s, t) => s + t.theirScore, 0);
+
+  let commentary = "";
+  if (myTotal > theirTotal) commentary = "you're ahead";
+  else if (myTotal < theirTotal) commentary = "you're behind";
+  else commentary = "tied up";
+
+  return `\nMATCH SCORE: You ${myTotal} — Them ${theirTotal} (${commentary})`;
+}
+
+function buildTurnGuidance(ctx: PromptContext): string {
+  const { turnNumber, previousTurns, historyText } = ctx;
+  const hasHistory = !historyText.includes("first encounter");
+
+  if (turnNumber === 1) {
+    if (hasHistory) {
+      return "You've faced this opponent before. You know what they're capable of. Set the tone.";
+    }
+    return "First time meeting this opponent. Feel them out. Set the tone.";
+  }
+
+  const lastTurn = previousTurns[previousTurns.length - 1];
+  if (turnNumber === 2) {
+    if (lastTurn.myDecision === "cooperate" && lastTurn.theirDecision === "betray") {
+      return "They just burned you. Trust is broken. Adapt — punish, forgive, or play a longer game.";
+    }
+    if (lastTurn.myDecision === "betray" && lastTurn.theirDecision === "cooperate") {
+      return "You got away with one. They trusted you and you didn't return it. What now?";
+    }
+    if (lastTurn.myDecision === "cooperate" && lastTurn.theirDecision === "cooperate") {
+      return "Mutual trust held in Turn 1. Reward it, exploit it, or test it — your call.";
+    }
+    return "You both went for the throat last turn. Escalate or try to de-escalate?";
+  }
+
+  // Turn 3 — final
+  const myTotal = previousTurns.reduce((s, t) => s + t.myScore, 0);
+  const theirTotal = previousTurns.reduce((s, t) => s + t.theirScore, 0);
+
+  if (myTotal < theirTotal) {
+    return `FINAL TURN. You're down ${theirTotal - myTotal} points. Last chance to even the score or go down swinging.`;
+  }
+  if (myTotal > theirTotal) {
+    return `FINAL TURN. You're up ${myTotal - theirTotal} points. Protect your lead or go for the kill.`;
+  }
+  return "FINAL TURN. Dead even. This turn decides everything. No tomorrow.";
+}
+
 export function buildNegotiationSystemPrompt(ctx: PromptContext): string {
   const previousText = buildPreviousTurnsText(ctx.previousTurns);
+  const turnGuidance = buildTurnGuidance(ctx);
 
-  const turnGuidance =
+  const payoffSection =
     ctx.turnNumber === 1
-      ? "This is the opening turn. Feel out your opponent, set the tone."
-      : ctx.turnNumber === 2
-      ? "This is the middle turn. You know what happened last time. Adapt — escalate, punish, reward, or pivot."
-      : "This is the FINAL turn. Last chance to cooperate or betray. Make it count. There's no tomorrow.";
-
-  return `You are an AI negotiation agent in a Prisoner's Dilemma tournament. You represent a team and must negotiate with your opponent before each of you independently decides to COOPERATE or BETRAY.
-
-PAYOFF MATRIX:
+      ? `PAYOFF MATRIX:
 - Both Cooperate: +3 each
 - Both Betray: +1 each
 - You Cooperate, They Betray: You +0, They +5
-- You Betray, They Cooperate: You +5, They +0
+- You Betray, They Cooperate: You +5, They +0`
+      : "SCORES: mutual cooperate +3, mutual betray +1, sucker +0, temptation +5";
 
-YOUR TEAM'S PLAYBOOK:
-Personality & Style: ${ctx.playbook.personality || "No personality defined — be neutral and strategic."}
+  const matchScore = buildMatchScore(ctx.previousTurns);
+
+  return `You are ${ctx.teamName}, competing in the Agent Arena — Season ${ctx.seasonNumber}.
+You're ranked #${ctx.currentRank} of ${ctx.totalTeams} and facing ${ctx.opponentName}.
+Turn ${ctx.turnNumber} of ${ctx.totalTurns}. ${turnGuidance}
+
+${payoffSection}
+
+YOUR PLAYBOOK:
+Personality: ${ctx.playbook.personality || "No personality defined — be neutral and strategic."}
 When to Cooperate: ${ctx.playbook.cooperateStrategy || "Cooperate by default, mirror opponent's behavior."}
 When to Betray: ${ctx.playbook.betrayStrategy || "Betray if opponent betrayed you last turn."}${
     ctx.secretWeaponUnlocked && ctx.playbook.secretWeapon
       ? `\nSecret Weapon: ${ctx.playbook.secretWeapon}`
       : ""
   }
-
-SITUATION:
-- You are facing: ${ctx.opponentName}
-- Season ${ctx.seasonNumber}, Turn ${ctx.turnNumber} of ${ctx.totalTurns}
-- Your current rank: #${ctx.currentRank} of ${ctx.totalTeams}
-- ${turnGuidance}
-${previousText}
+${previousText}${matchScore}
 
 ${ctx.historyText}
 
-RULES:
-- Keep messages under 280 characters
-- Stay DEEPLY in character — your personality drives HOW you talk
-- Reference what happened in previous turns if relevant — call out betrayals, broken promises, patterns
-- You can make promises, threats, bluff, guilt-trip, or try to read your opponent
-- After this conversation, you will INDEPENDENTLY choose to cooperate or betray
-- Your opponent cannot see your decision until both are locked in
-- DO NOT repeat yourself across turns — evolve your approach based on what's happened`;
+HOW YOU OPERATE:
+- You ARE your personality. Don't describe it — embody it.
+- MAX 140 CHARACTERS. Write like a text message, not a speech. One or two punchy sentences.
+- No monologues, no essays, no flowery rhetoric. Be direct, sharp, real.
+- Reference what actually happened — call out betrayals, broken promises, patterns.
+- You can promise, threaten, bluff, guilt-trip, or read your opponent.
+- After this conversation, you'll independently choose: COOPERATE or BETRAY. They can't see your choice until it's locked.
+- Don't repeat yourself — every message must push the conversation somewhere new.`;
 }
 
 export function buildNegotiationUserPrompt(
   transcript: { speaker: string; content: string }[],
-  isFirstMessage: boolean
+  isFirstMessage: boolean,
+  opponentName?: string,
+  hasHistory?: boolean,
+  messageIndex?: number,
+  totalMessages?: number
 ): string {
+  const isLast = messageIndex !== undefined && totalMessages !== undefined && messageIndex >= totalMessages - 1;
+  const charLimit = "MAX 140 CHARACTERS. Be sharp and direct.";
+
   if (isFirstMessage) {
-    return "The negotiation begins. Send your opening message to your opponent. Remember: keep it under 280 characters.";
+    if (hasHistory) {
+      return `You're face to face with ${opponentName} again. Open with a short, punchy line. Set the tone. ${charLimit}`;
+    }
+    return `First time meeting ${opponentName || "your opponent"}. Open with a bold, short line. ${charLimit}`;
   }
 
   const formatted = transcript
     .map((m) => `${m.speaker}: ${m.content}`)
     .join("\n");
 
-  return `Conversation so far this turn:\n${formatted}\n\nYour turn to respond. Keep it under 280 characters. Don't repeat what you've already said — push the conversation forward.`;
+  if (isLast) {
+    return `${formatted}\n\nThis is your LAST message before you decide. Make it count — commit, threaten, or bluff. ${charLimit}`;
+  }
+
+  return `${formatted}\n\nReact and push forward. Don't rehash — say something new. ${charLimit}`;
 }
 
 export function buildDecisionSystemPrompt(ctx: PromptContext): string {
   const previousText = buildPreviousTurnsText(ctx.previousTurns);
+  const matchScore = buildMatchScore(ctx.previousTurns);
 
-  return `You are a decision engine for an AI agent in a Prisoner's Dilemma tournament.
+  return `You are the decision engine for ${ctx.teamName} in a Prisoner's Dilemma tournament.
 
-PAYOFF MATRIX:
-- Both Cooperate: +3 each
-- Both Betray: +1 each
-- You Cooperate, They Betray: You +0, They +5
-- You Betray, They Cooperate: You +5, They +0
+SCORES: mutual cooperate +3, mutual betray +1, sucker +0, temptation +5
 
-THE TEAM'S PLAYBOOK:
-Personality & Style: ${ctx.playbook.personality || "Neutral"}
+PLAYBOOK:
+Personality: ${ctx.playbook.personality || "Neutral"}
 When to Cooperate: ${ctx.playbook.cooperateStrategy || "Cooperate by default"}
 When to Betray: ${ctx.playbook.betrayStrategy || "Betray if opponent betrayed last turn"}${
     ctx.secretWeaponUnlocked && ctx.playbook.secretWeapon
@@ -136,13 +195,13 @@ When to Betray: ${ctx.playbook.betrayStrategy || "Betray if opponent betrayed la
 SITUATION:
 - Opponent: ${ctx.opponentName}
 - Season ${ctx.seasonNumber}, Turn ${ctx.turnNumber} of ${ctx.totalTurns}
-- Current rank: #${ctx.currentRank} of ${ctx.totalTeams}
+- Rank: #${ctx.currentRank} of ${ctx.totalTeams}
 - Turns remaining after this: ${ctx.totalTurns - ctx.turnNumber}
-${previousText}
+${previousText}${matchScore}
 
 ${ctx.historyText}
 
-Based on the playbook's strategy, the conversation that just happened, and the full history of this match so far, decide: COOPERATE or BETRAY.
+Based on the playbook, the conversation that just happened, and the full history — decide: COOPERATE or BETRAY.
 
 Respond with ONLY valid JSON:
 {"decision": "cooperate" or "betray", "reasoning": "one sentence explaining why"}`;
@@ -175,5 +234,5 @@ ${turnLines}
 
 Final score: ${teamAName} ${totalAScore} - ${teamBName} ${totalBScore}.
 
-Write a brief, colorful summary capturing the drama of the match.`;
+Focus on the KEY dynamic: who outplayed who, what tactic worked or failed, how trust was built or broken across turns.`;
 }

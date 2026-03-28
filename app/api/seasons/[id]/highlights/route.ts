@@ -10,6 +10,8 @@ export async function GET(
 
   const supabase = createServerClient();
 
+  const teamId = req.nextUrl.searchParams.get("team_id");
+
   let query = supabase
     .from("highlights")
     .select(
@@ -17,6 +19,13 @@ export async function GET(
     )
     .eq("season_id", parseInt(seasonId))
     .order("ranking");
+
+  // Filter by team_id if provided, otherwise only global highlights
+  if (teamId) {
+    query = query.eq("team_id", teamId);
+  } else {
+    query = query.is("team_id", null);
+  }
 
   if (round) {
     query = query.eq("round", parseInt(round));

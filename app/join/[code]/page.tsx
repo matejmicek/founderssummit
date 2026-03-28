@@ -21,7 +21,7 @@ export default function JoinTeamPage() {
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to join");
-        router.push("/team");
+        router.push(`/team/${data.team.join_code}`);
       })
       .catch((e) => {
         setError(e instanceof Error ? e.message : "Failed to join team");

@@ -13,7 +13,8 @@ import {
 } from "./prompts";
 
 const TURNS_PER_MATCH = 3;
-const MESSAGES_PER_TURN = 6; // 3 messages per team per turn
+const MESSAGES_PER_TURN = 4; // 2 messages per team per turn
+const MAX_MESSAGE_CHARS = 140;
 
 interface TeamData {
   id: string;
@@ -95,6 +96,7 @@ export async function executeMatch(
     }));
 
     const contextA: PromptContext = {
+      teamName: teamA.name,
       playbook: teamA.playbook,
       opponentName: teamB.name,
       historyText: formatHistoryForPrompt(historyA, teamB.name),
@@ -108,6 +110,7 @@ export async function executeMatch(
     };
 
     const contextB: PromptContext = {
+      teamName: teamB.name,
       playbook: teamB.playbook,
       opponentName: teamA.name,
       historyText: formatHistoryForPrompt(historyB, teamA.name),
@@ -129,16 +132,26 @@ export async function executeMatch(
       const team = isTeamA ? teamA : teamB;
 
       const systemPrompt = buildNegotiationSystemPrompt(ctx);
+      const opponent = isTeamA ? teamB : teamA;
+      const hasHistory = isTeamA
+        ? historyA.length > 0
+        : historyB.length > 0;
       const userPrompt = buildNegotiationUserPrompt(
         turnTranscript.map((t) => ({
           speaker: t.teamId === team.id ? "You" : "Opponent",
           content: t.content,
         })),
-        i === 0
+        i === 0,
+        opponent.name,
+        hasHistory,
+        i,
+        MESSAGES_PER_TURN
       );
 
-      let message = await chatCompletion("fast", systemPrompt, userPrompt, 200);
-      if (message.length > 280) message = message.slice(0, 277) + "...";
+      let message = await chatCompletion("fast", systemPrompt, userPrompt, 80);
+      // Strip quotes if the model wraps in them
+      message = message.replace(/^["']|["']$/g, "").trim();
+      if (message.length > MAX_MESSAGE_CHARS) message = message.slice(0, MAX_MESSAGE_CHARS - 3) + "...";
 
       // Insert message into DB (triggers Realtime)
       await supabase.from("messages").insert({
@@ -322,6 +335,20 @@ async function generateAndStoreSummary(
 
   // Store encounter history for both teams (one record per match, not per turn)
   const finalTurn = turns[turns.length - 1];
+  const turnDecisionsA = turns.map((t) => ({
+    turn: t.turn,
+    my: t.teamADecision,
+    their: t.teamBDecision,
+    myScore: t.teamAScore,
+    theirScore: t.teamBScore,
+  }));
+  const turnDecisionsB = turns.map((t) => ({
+    turn: t.turn,
+    my: t.teamBDecision,
+    their: t.teamADecision,
+    myScore: t.teamBScore,
+    theirScore: t.teamAScore,
+  }));
   await supabase.from("encounter_history").insert([
     {
       team_id: teamA.id,
@@ -334,6 +361,7 @@ async function generateAndStoreSummary(
       my_score: totalAScore,
       their_score: totalBScore,
       summary,
+      turn_decisions: turnDecisionsA,
     },
     {
       team_id: teamB.id,
@@ -346,6 +374,7 @@ async function generateAndStoreSummary(
       my_score: totalBScore,
       their_score: totalAScore,
       summary,
+      turn_decisions: turnDecisionsB,
     },
   ]);
 }

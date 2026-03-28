@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { getAllMatchups } from "@/lib/engine/matchup";
 import { executeMatch, refreshLeaderboard } from "@/lib/engine/executor";
-import { generateHighlights, getHighlightData } from "@/lib/engine/highlights";
+import { generateHighlights, generateTeamHighlights, getHighlightData, getTeamHighlightData } from "@/lib/engine/highlights";
 import { generateVoiceoversForHighlights } from "@/lib/engine/voiceover";
 
 export const maxDuration = 300; // 5 min — 15 matches × 3 turns each
@@ -17,9 +17,9 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!process.env.OPENAI_API_KEY) {
+  if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
-      { error: "OPENAI_API_KEY not configured. Set it in Vercel environment variables." },
+      { error: "ANTHROPIC_API_KEY not configured. Set it in environment variables." },
       { status: 500 }
     );
   }
@@ -220,6 +220,22 @@ export async function POST(
       console.error("Voiceover generation failed:", e);
     }
 
+    // === PHASE 2.7: generate team-specific highlights (2 per team) ===
+    let teamHighlightsCount = 0;
+    try {
+      teamHighlightsCount = await generateTeamHighlights(parseInt(seasonId), 1);
+    } catch (e) {
+      console.error("Team highlight generation failed:", e);
+    }
+
+    // Generate voiceovers for team highlights
+    try {
+      const teamHighlightData = await getTeamHighlightData(parseInt(seasonId), 1);
+      await generateVoiceoversForHighlights(teamHighlightData);
+    } catch (e) {
+      console.error("Team voiceover generation failed:", e);
+    }
+
     // === PHASE 3: showing_highlights ===
     await supabase
       .from("seasons")
@@ -237,6 +253,7 @@ export async function POST(
       matchesCompleted: completed,
       matchesFailed: failed,
       highlightsGenerated: highlightsCount,
+      teamHighlightsGenerated: teamHighlightsCount,
     });
   } catch (error) {
     console.error("Round execution failed:", error);
