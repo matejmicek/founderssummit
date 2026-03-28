@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   if (teamCode && typeof teamCode === "string") {
     const { data: team, error: teamErr } = await supabase
       .from("teams")
-      .select("id, name, color, tournament_id")
+      .select("id, name, color, tournament_id, join_code")
       .eq("join_code", teamCode.toUpperCase().trim())
       .single();
 

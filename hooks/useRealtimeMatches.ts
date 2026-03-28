@@ -38,6 +38,9 @@ export function useRealtimeMatches(seasonId: number | null) {
 
     if (!seasonId) return;
 
+    // Poll every 3s as a fallback in case realtime misses events
+    const interval = setInterval(fetchMatches, 3000);
+
     const supabase = createBrowserClient();
     const channel = supabase
       .channel("match-changes")
@@ -56,6 +59,7 @@ export function useRealtimeMatches(seasonId: number | null) {
       .subscribe();
 
     return () => {
+      clearInterval(interval);
       supabase.removeChannel(channel);
     };
   }, [seasonId, fetchMatches]);

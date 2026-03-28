@@ -15,12 +15,12 @@ export async function GET() {
   const tournamentId = cookieStore.get("tournament_id")?.value;
 
   // Get current active season for this tournament
-  // Only look for seasons where playbook editing makes sense (building, tweaking, running)
+  // Include completed so teams can still view their playbook after the season ends
   // NOT pending — those haven't started yet
   let query = supabase
     .from("seasons")
     .select("id, status")
-    .in("status", ["building", "tweaking", "running"])
+    .in("status", ["building", "tweaking", "running", "completed"])
     .order("number", { ascending: false })
     .limit(1);
 

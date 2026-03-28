@@ -98,22 +98,26 @@ export default function AdminPage() {
           const lockIdx = PHASE_ORDER.indexOf(lock.phase);
           const serverIdx = PHASE_ORDER.indexOf(serverPhase);
 
-          if (serverIdx <= lockIdx) {
-            // Server is behind or at locked phase — keep showing locked phase, don't update seasons
-            return;
-          }
-
-          // Server is ahead — step forward one phase at a time with 3s minimum each
-          const nextPhase = PHASE_ORDER[Math.min(lockIdx + 1, PHASE_ORDER.length - 1)];
-          if (nextPhase !== serverPhase) {
-            phaseLockedRef.current = { phase: nextPhase, until: Date.now() + 3000 };
-            setSeasons(data.seasons.map((s: Season) =>
-              s.status === "running" ? { ...s, round_status: nextPhase } : s
-            ));
-          } else {
-            // We've caught up to server — release lock, use server data
+          // If server phase is unknown or season is no longer running, release lock
+          if (serverIdx === -1 || !serverSeason) {
             phaseLockedRef.current = null;
             setSeasons(data.seasons);
+          } else if (serverIdx <= lockIdx) {
+            // Server is behind or at locked phase — keep showing locked phase, don't update seasons
+            return;
+          } else {
+            // Server is ahead — step forward one phase at a time with 2s minimum each
+            const nextPhase = PHASE_ORDER[Math.min(lockIdx + 1, PHASE_ORDER.length - 1)];
+            if (nextPhase !== serverPhase) {
+              phaseLockedRef.current = { phase: nextPhase, until: Date.now() + 2000 };
+              setSeasons(data.seasons.map((s: Season) =>
+                s.status === "running" ? { ...s, round_status: nextPhase } : s
+              ));
+            } else {
+              // We've caught up to server — release lock, use server data
+              phaseLockedRef.current = null;
+              setSeasons(data.seasons);
+            }
           }
         } else {
           // No active lock — use server data directly
