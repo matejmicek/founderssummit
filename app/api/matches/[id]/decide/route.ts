@@ -7,7 +7,7 @@ import { generateVoiceoversForHighlights } from "@/lib/engine/voiceover";
 import { getRoundRules } from "@/lib/engine/rounds";
 import type { Decision } from "@/lib/engine/scoring";
 
-export const maxDuration = 60;
+export const maxDuration = 300; // 5 min — highlights + voiceovers can take a while
 
 export async function POST(
   req: NextRequest,
@@ -238,6 +238,14 @@ async function checkRoundComplete(seasonId: number, tournamentId: string) {
     return; // Still matches in progress
   }
 
+  // Get the current round number
+  const { data: seasonData } = await supabase
+    .from("seasons")
+    .select("current_round")
+    .eq("id", seasonId)
+    .single();
+  const round = seasonData?.current_round || 1;
+
   // All matches complete — refresh leaderboard
   await refreshLeaderboard(seasonId);
 
@@ -248,27 +256,32 @@ async function checkRoundComplete(seasonId: number, tournamentId: string) {
     .eq("id", seasonId);
 
   try {
-    await generateHighlights(seasonId, 1);
+    await generateHighlights(seasonId, round);
   } catch (e) {
     console.error("Highlight generation failed:", e);
   }
 
+  // Generate voiceover scripts + audio for highlights
   try {
-    const highlightData = await getHighlightData(seasonId, 1);
-    await generateVoiceoversForHighlights(highlightData);
+    const highlightData = await getHighlightData(seasonId, round);
+    if (highlightData.length > 0) {
+      await generateVoiceoversForHighlights(highlightData);
+    }
   } catch (e) {
     console.error("Voiceover generation failed:", e);
   }
 
   try {
-    await generateTeamHighlights(seasonId, 1);
+    await generateTeamHighlights(seasonId, round);
   } catch (e) {
     console.error("Team highlight generation failed:", e);
   }
 
   try {
-    const teamHighlightData = await getTeamHighlightData(seasonId, 1);
-    await generateVoiceoversForHighlights(teamHighlightData);
+    const teamHighlightData = await getTeamHighlightData(seasonId, round);
+    if (teamHighlightData.length > 0) {
+      await generateVoiceoversForHighlights(teamHighlightData);
+    }
   } catch (e) {
     console.error("Team voiceover generation failed:", e);
   }
