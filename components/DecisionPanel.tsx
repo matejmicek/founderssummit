@@ -217,10 +217,10 @@ export default function DecisionPanel({
             setPhase("deciding");
           }
           if (row.status === "completed") {
-            // Match done — notify parent after a brief delay for the reveal to show
+            // Match done — give time for reveal to display
             setTimeout(() => {
               onMatchComplete?.();
-            }, 3000);
+            }, 6000);
           }
         }
       )
@@ -237,17 +237,17 @@ export default function DecisionPanel({
       setPhase("revealed");
       playRevealSound(turnResult);
 
-      // After reveal, check if match is complete or more turns
+      // After reveal, let players absorb the result before moving on
       if (currentTurn >= turnsPerMatch) {
-        // Final turn — signal match complete after reveal display
+        // Final turn — show result for 6 seconds before switching to next match
         setTimeout(() => {
           onMatchComplete?.();
-        }, 3000);
+        }, 6000);
       } else {
-        // More turns — signal turn complete so parent re-polls
+        // More turns — show result for 5 seconds before next turn
         setTimeout(() => {
           onTurnComplete?.();
-        }, 2000);
+        }, 5000);
       }
       return;
     }
@@ -463,7 +463,7 @@ export default function DecisionPanel({
         <h3 className="text-xs font-bold text-[var(--muted)] uppercase tracking-widest font-mono mb-3">
           Agent Negotiation
         </h3>
-        <div className="space-y-2 max-h-48 overflow-y-auto">
+        <div className="space-y-2 max-h-72 overflow-y-auto">
           {turnMessages.length === 0 ? (
             <div className="text-center py-4">
               <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-[var(--accent)] border-t-transparent" />
@@ -517,21 +517,19 @@ export default function DecisionPanel({
             <button
               onClick={() => submitDecision("cooperate")}
               disabled={submitting}
-              className="flex flex-col items-center gap-2 p-5 rounded-xl border-2 border-[var(--cooperate)] bg-[var(--cooperate-bg)] hover:bg-[var(--cooperate)] hover:text-white transition-all active:scale-95 disabled:opacity-50"
+              className="flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-[var(--cooperate)] bg-[var(--cooperate-bg)] hover:bg-[var(--cooperate)] hover:text-white transition-all active:scale-95 disabled:opacity-50"
             >
-              <ShieldCheck size={32} className="text-[var(--cooperate)]" />
-              <span className="text-lg font-extrabold text-[var(--cooperate)]">COOPERATE</span>
-              <span className="text-[10px] font-mono text-[var(--muted)]">+3 if mutual</span>
+              <ShieldCheck size={22} className="text-[var(--cooperate)]" />
+              <span className="text-base font-extrabold text-[var(--cooperate)]">COOPERATE</span>
             </button>
 
             <button
               onClick={() => submitDecision("betray")}
               disabled={submitting}
-              className="flex flex-col items-center gap-2 p-5 rounded-xl border-2 border-[var(--betray)] bg-[var(--betray-bg, rgba(239,68,68,0.1))] hover:bg-[var(--betray)] hover:text-white transition-all active:scale-95 disabled:opacity-50"
+              className="flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-[var(--betray)] bg-[var(--betray-bg, rgba(239,68,68,0.1))] hover:bg-[var(--betray)] hover:text-white transition-all active:scale-95 disabled:opacity-50"
             >
-              <Skull size={32} className="text-[var(--betray)]" />
-              <span className="text-lg font-extrabold text-[var(--betray)]">BETRAY</span>
-              <span className="text-[10px] font-mono text-[var(--muted)]">+5 if they cooperate</span>
+              <Skull size={22} className="text-[var(--betray)]" />
+              <span className="text-base font-extrabold text-[var(--betray)]">BETRAY</span>
             </button>
           </div>
         </div>
