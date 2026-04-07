@@ -2,73 +2,61 @@
 
 export interface RoundRules {
   label: string;
-  noiseChance: number;         // 0-1, probability of decision flip
   memoryEnabled: boolean;      // whether agents reference past encounters
-  secretWeaponEnabled: boolean;
   turnsPerMatch: number;       // 3 or 5
   eliminationCount: number;    // how many teams eliminated after round
   payoffMultiplier: number;    // on top of season multiplier
-  decisionTimerSeconds: number; // countdown for human decisions
+  noiseChance: number;         // always 0, kept for interface compat
 }
 
 /**
  * Default escalating rules per round number.
- * Round 1: Basic — no memory, no secret weapon, just personality + decisions
+ * Round 1: Basic — no memory, just personality + decisions
  * Round 2: Memory — agents now reference what happened in previous rounds
- * Round 3: Secret Weapon — unlock the secret weapon field
- * Round 4: Noise — 15% chance of random decision flip (forgiveness mechanic)
- * Round 5: Endgame — double stakes, elimination format
+ * Round 3: High Stakes — double points
+ * Round 4: Endgame — double points, elimination
+ * Round 5+: Finals — same as round 4
  */
 export const DEFAULT_ROUND_RULES: Record<number, RoundRules> = {
   1: {
     label: "First Contact",
     noiseChance: 0,
     memoryEnabled: false,
-    secretWeaponEnabled: false,
     turnsPerMatch: 3,
     eliminationCount: 0,
     payoffMultiplier: 1,
-    decisionTimerSeconds: 20,
   },
   2: {
     label: "Memory",
     noiseChance: 0,
     memoryEnabled: true,
-    secretWeaponEnabled: false,
     turnsPerMatch: 3,
     eliminationCount: 0,
     payoffMultiplier: 1,
-    decisionTimerSeconds: 20,
   },
   3: {
-    label: "Secret Weapon",
+    label: "High Stakes",
     noiseChance: 0,
     memoryEnabled: true,
-    secretWeaponEnabled: true,
     turnsPerMatch: 3,
     eliminationCount: 0,
-    payoffMultiplier: 1,
-    decisionTimerSeconds: 20,
+    payoffMultiplier: 2,
   },
   4: {
-    label: "Noise",
-    noiseChance: 0.15,
-    memoryEnabled: true,
-    secretWeaponEnabled: true,
-    turnsPerMatch: 3,
-    eliminationCount: 0,
-    payoffMultiplier: 1,
-    decisionTimerSeconds: 20,
-  },
-  5: {
     label: "Endgame",
     noiseChance: 0,
     memoryEnabled: true,
-    secretWeaponEnabled: true,
     turnsPerMatch: 3,
     eliminationCount: 2,
     payoffMultiplier: 2,
-    decisionTimerSeconds: 15,
+  },
+  5: {
+    label: "Finals",
+    noiseChance: 0,
+    memoryEnabled: true,
+    turnsPerMatch: 3,
+    eliminationCount: 2,
+    payoffMultiplier: 2,
   },
 };
 
@@ -85,44 +73,44 @@ export function getRoundRules(
 export const ARCHETYPES = [
   {
     id: "diplomat",
-    emoji: "🕊️",
+    emoji: "\u{1F54A}\u{FE0F}",
     name: "The Diplomat",
     personality: "I seek mutual benefit above all. I keep my promises and expect the same. Calm, measured, trustworthy.",
     color: "#22c55e",
   },
   {
     id: "shark",
-    emoji: "🦈",
+    emoji: "\u{1F988}",
     name: "The Shark",
     personality: "I exploit weakness. Trust is a tool to be used and discarded. Aggressive, calculating, ruthless.",
     color: "#ef4444",
   },
   {
     id: "mirror",
-    emoji: "🪞",
+    emoji: "\u{1FA9E}",
     name: "The Mirror",
     personality: "I match your energy exactly. Cooperate with me and I cooperate back. Cross me and I make you pay. Fair but fierce.",
     color: "#3b82f6",
   },
   {
     id: "wildcard",
-    emoji: "🃏",
+    emoji: "\u{1F0CF}",
     name: "The Wildcard",
     personality: "Unpredictable and proud of it. Sometimes generous, sometimes ruthless. You never know which version you'll get.",
     color: "#a855f7",
   },
   {
     id: "grudge",
-    emoji: "🗡️",
+    emoji: "\u{1F5E1}\u{FE0F}",
     name: "The Grudge-Holder",
     personality: "I forgive nothing. Cross me once, and I will remember. Loyal to allies but devastating to enemies.",
     color: "#f97316",
   },
   {
     id: "charmer",
-    emoji: "🎭",
+    emoji: "\u{1F3AD}",
     name: "The Charmer",
-    personality: "Sweet-talking and persuasive. I make everyone feel like my best friend — right up until the moment I'm not. Disarming and dangerous.",
+    personality: "Sweet-talking and persuasive. I make everyone feel like my best friend \u2014 right up until the moment I'm not. Disarming and dangerous.",
     color: "#ec4899",
   },
 ];

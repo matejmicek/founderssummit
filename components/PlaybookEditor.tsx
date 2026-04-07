@@ -1,21 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Check, Lock, Users, Wifi, WifiOff, CloudCheck } from "lucide-react";
+import { Check, Users, Wifi, WifiOff, CloudCheck } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
 import ArchetypeSelector from "./ArchetypeSelector";
 
 interface Props {
   seasonId: number | null;
   teamId: string;
-  secretWeaponUnlocked: boolean;
   roundNumber?: number;
 }
 
 export default function PlaybookEditor({
   seasonId,
   teamId,
-  secretWeaponUnlocked,
   roundNumber = 1,
 }: Props) {
   const [personality, setPersonality] = useState("");
@@ -260,27 +258,6 @@ export default function PlaybookEditor({
           onChange={(e) => setNegotiationGoal(e.target.value.slice(0, 300))}
           placeholder="Optional: What should your agent try to achieve in negotiations? e.g., 'Build trust early, then read their intentions' or 'Intimidate them into cooperating'"
           className="w-full bg-[var(--background)] border border-[var(--border)] rounded px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-[var(--accent)] transition-all placeholder:text-[var(--muted)]"
-          rows={2}
-        />
-      </div>
-
-      {/* Secret Weapon */}
-      <div className={`card p-4 ${secretWeaponUnlocked ? "" : "opacity-50"}`}>
-        <label className="flex items-center justify-between text-sm font-semibold text-[var(--foreground-secondary)] mb-2">
-          <span className="flex items-center gap-1.5">
-            {!secretWeaponUnlocked && <Lock size={14} />}
-            Secret Weapon {!secretWeaponUnlocked && "— Unlocks Round 3"}
-          </span>
-          <span className="font-mono text-xs tabular-nums text-[var(--muted)]">
-            {secretWeapon.length}/100
-          </span>
-        </label>
-        <textarea
-          value={secretWeapon}
-          onChange={(e) => setSecretWeapon(e.target.value.slice(0, 100))}
-          placeholder="A special twist for your agent's negotiation style..."
-          disabled={!secretWeaponUnlocked}
-          className="w-full bg-[var(--background)] border border-[var(--border)] rounded px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-[var(--accent)] transition-all placeholder:text-[var(--muted)] disabled:cursor-not-allowed"
           rows={2}
         />
       </div>

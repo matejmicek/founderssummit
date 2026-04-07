@@ -139,16 +139,11 @@ export default function HowToPlay() {
             </div>
             <div className="flex items-center gap-2 p-2 rounded bg-[var(--background-alt)]">
               <span className="font-mono font-bold text-[var(--accent)] w-8">R3</span>
-              <span className="font-bold">Secret Weapon</span>
-              <span className="text-xs text-[var(--muted)] ml-auto">Unlock a hidden tactic.</span>
+              <span className="font-bold">High Stakes</span>
+              <span className="text-xs text-[var(--muted)] ml-auto">2x points. Every decision counts double.</span>
             </div>
             <div className="flex items-center gap-2 p-2 rounded bg-[var(--background-alt)]">
               <span className="font-mono font-bold text-[var(--accent)] w-8">R4</span>
-              <span className="font-bold">Noise</span>
-              <span className="text-xs text-[var(--muted)] ml-auto">15% chance your decision gets flipped.</span>
-            </div>
-            <div className="flex items-center gap-2 p-2 rounded bg-[var(--background-alt)]">
-              <span className="font-mono font-bold text-[var(--accent)] w-8">R5</span>
               <span className="font-bold">Endgame</span>
               <span className="text-xs text-[var(--muted)] ml-auto">2x points. Bottom teams eliminated.</span>
             </div>

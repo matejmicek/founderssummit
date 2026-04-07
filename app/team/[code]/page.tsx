@@ -42,7 +42,6 @@ export default function TeamPage({
   const [roundStatus, setRoundStatus] = useState("idle");
   const [currentRound, setCurrentRound] = useState(0);
   const [roundLabel, setRoundLabel] = useState("");
-  const [noiseChance, setNoiseChance] = useState(0);
   const [turnsPerMatch, setTurnsPerMatch] = useState(3);
   const [resolved, setResolved] = useState(false);
   const [resolveError, setResolveError] = useState("");
@@ -179,7 +178,6 @@ export default function TeamPage({
           // Extract round rules
           const rules = data.season.round_rules || {};
           setRoundLabel(rules.label || "");
-          setNoiseChance(rules.noiseChance || 0);
           setTurnsPerMatch(rules.turnsPerMatch || 3);
 
           const newRoundStatus = data.season.round_status || "idle";
@@ -261,7 +259,6 @@ export default function TeamPage({
     );
   }
 
-  const secretWeaponUnlocked = currentRound >= 3;
   const isShowingHighlights = roundStatus === "showing_highlights";
   const isRunningMatches =
     roundStatus === "running_matches" ||
@@ -349,15 +346,6 @@ export default function TeamPage({
         </div>
       )}
 
-      {/* Noise warning banner */}
-      {noiseChance > 0 && isRunningMatches && (
-        <div className="mx-4 mb-2 p-2 rounded bg-yellow-500/10 border border-yellow-500/30 text-center">
-          <p className="text-xs font-mono text-yellow-600 dark:text-yellow-400">
-            ⚡ NOISE ROUND: {Math.round(noiseChance * 100)}% chance your decision gets randomly flipped!
-          </p>
-        </div>
-      )}
-
       {/* Running matches banner (only if no active match) */}
       {isRunningMatches && !hasActiveMatch && (
         <div className="mx-4 mb-2 p-3 rounded bg-[var(--accent-light)] border border-[var(--accent)]/30 text-center">
@@ -382,7 +370,6 @@ export default function TeamPage({
             <PlaybookEditor
               seasonId={seasonId}
               teamId={teamId}
-              secretWeaponUnlocked={secretWeaponUnlocked}
               roundNumber={currentRound}
             />
           </div>
@@ -399,8 +386,6 @@ export default function TeamPage({
             teamBColor={activeMatch.team_b_color}
             currentTurn={activeMatch.current_turn}
             turnsPerMatch={turnsPerMatch}
-            decisionDeadline={activeMatch.decision_deadline}
-            noiseChance={noiseChance}
             matchIndex={matchIndex}
             totalMatches={totalMatches}
             onTurnComplete={() => pollActiveMatch()}

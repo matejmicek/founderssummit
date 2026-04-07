@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
 import { createBrowserClient } from "@/lib/supabase";
-import { ShieldCheck, Skull, Clock, Zap } from "lucide-react";
+import { ShieldCheck, Skull } from "lucide-react";
 
 interface Props {
   matchId: string;
@@ -16,8 +16,6 @@ interface Props {
   teamBColor: string;
   currentTurn: number;
   turnsPerMatch: number;
-  decisionDeadline: string | null;
-  noiseChance: number;
   matchIndex?: number;      // e.g. 1
   totalMatches?: number;    // e.g. 2
   onTurnComplete?: () => void;
@@ -46,8 +44,6 @@ export default function DecisionPanel({
   teamBColor,
   currentTurn,
   turnsPerMatch,
-  decisionDeadline,
-  noiseChance,
   matchIndex,
   totalMatches,
   onTurnComplete,
@@ -55,7 +51,6 @@ export default function DecisionPanel({
 }: Props) {
   const [phase, setPhase] = useState<Phase>("watching");
   const [myDecision, setMyDecision] = useState<string | null>(null);
-  const [timeLeft, setTimeLeft] = useState<number>(20);
   const [turnResult, setTurnResult] = useState<TurnResult | null>(null);
   const [revealCountdown, setRevealCountdown] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -69,7 +64,6 @@ export default function DecisionPanel({
       prevMatchIdRef.current = matchId;
       setPhase("watching");
       setMyDecision(null);
-      setTimeLeft(20);
       setTurnResult(null);
       setRevealCountdown(null);
       setSubmitting(false);
@@ -84,7 +78,6 @@ export default function DecisionPanel({
       prevTurnRef.current = currentTurn;
       setPhase("watching");
       setMyDecision(null);
-      setTimeLeft(20);
       setTurnResult(null);
       setRevealCountdown(null);
       setSubmitting(false);
@@ -197,24 +190,6 @@ export default function DecisionPanel({
 
     return () => { supabase.removeChannel(channel); };
   }, [matchId, phase, onMatchComplete]);
-
-  // Decision timer countdown
-  useEffect(() => {
-    if (phase !== "deciding" || !decisionDeadline) return;
-
-    const tick = () => {
-      const remaining = Math.max(0, Math.ceil((new Date(decisionDeadline).getTime() - Date.now()) / 1000));
-      setTimeLeft(remaining);
-
-      if (remaining <= 0 && !myDecision) {
-        submitDecision("cooperate");
-      }
-    };
-
-    tick();
-    const interval = setInterval(tick, 200);
-    return () => clearInterval(interval);
-  }, [phase, decisionDeadline, myDecision]);
 
   // Reveal countdown
   useEffect(() => {
@@ -391,14 +366,6 @@ export default function DecisionPanel({
           </div>
         )}
 
-        {noiseChance > 0 && (
-          <div className="mt-2 text-center">
-            <span className="text-[10px] font-mono text-[var(--accent)] bg-[var(--accent-light)] px-2 py-0.5 rounded-full">
-              <Zap size={10} className="inline mr-1" />
-              {Math.round(noiseChance * 100)}% noise — decisions may be flipped!
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Negotiation transcript */}
@@ -451,13 +418,8 @@ export default function DecisionPanel({
 
       {phase === "deciding" && !myDecision && (
         <div className="space-y-3" style={{ animation: "fade-in 0.4s ease-out" }}>
-          {/* Timer */}
           <div className="text-center">
-            <div className="inline-flex items-center gap-2 text-lg font-mono font-bold">
-              <Clock size={18} className={timeLeft <= 5 ? "text-[var(--betray)] animate-pulse" : "text-[var(--muted)]"} />
-              <span className={timeLeft <= 5 ? "text-[var(--betray)]" : ""}>{timeLeft}s</span>
-            </div>
-            <p className="text-xs text-[var(--muted)] mt-1">Make your decision!</p>
+            <p className="text-sm font-bold text-[var(--foreground)]">Make your decision!</p>
           </div>
 
           {/* Decision buttons */}
@@ -526,11 +488,6 @@ export default function DecisionPanel({
                 {turnResult.team_a_decision === "cooperate" ? "COOPERATE" : "BETRAY"}
               </div>
               <div className="text-lg font-bold font-mono mt-1">+{turnResult.team_a_score}</div>
-              {turnResult.noise_flipped_a && (
-                <div className="text-[10px] font-mono text-[var(--accent)] mt-1">
-                  <Zap size={10} className="inline" /> NOISE FLIPPED!
-                </div>
-              )}
             </div>
 
             <div className={`card p-4 text-center border-2 ${
@@ -545,11 +502,6 @@ export default function DecisionPanel({
                 {turnResult.team_b_decision === "cooperate" ? "COOPERATE" : "BETRAY"}
               </div>
               <div className="text-lg font-bold font-mono mt-1">+{turnResult.team_b_score}</div>
-              {turnResult.noise_flipped_b && (
-                <div className="text-[10px] font-mono text-[var(--accent)] mt-1">
-                  <Zap size={10} className="inline" /> NOISE FLIPPED!
-                </div>
-              )}
             </div>
           </div>
 

@@ -399,9 +399,8 @@ export default function AdminPage() {
                         : `Waiting (${readyCount}/${teams.length})`}
                     </button>
                     <span className="text-[10px] font-mono text-[var(--muted)]">
-                      {rules.noiseChance > 0 && <span className="text-yellow-500 mr-1">⚡ {Math.round(rules.noiseChance * 100)}% noise</span>}
                       {rules.memoryEnabled && <span className="mr-1">🧠 memory</span>}
-                      {rules.secretWeaponEnabled && <span className="mr-1">🗡️ secret weapon</span>}
+                      {rules.payoffMultiplier > 1 && <span className="text-[var(--accent)] mr-1">{rules.payoffMultiplier}x points</span>}
                       {rules.eliminationCount > 0 && <span className="text-[var(--betray)]">☠️ eliminates {rules.eliminationCount}</span>}
                     </span>
                   </>

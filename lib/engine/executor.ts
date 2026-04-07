@@ -137,7 +137,7 @@ export async function executeNegotiation(
     seasonNumber,
     turnNumber: turn,
     totalTurns: turnsPerMatch,
-    secretWeaponUnlocked: roundRules.secretWeaponEnabled,
+    secretWeaponUnlocked: false,
     previousTurns: previousTurnsA,
   };
 
@@ -151,7 +151,7 @@ export async function executeNegotiation(
     seasonNumber,
     turnNumber: turn,
     totalTurns: turnsPerMatch,
-    secretWeaponUnlocked: roundRules.secretWeaponEnabled,
+    secretWeaponUnlocked: false,
     previousTurns: previousTurnsB,
   };
 
@@ -206,13 +206,11 @@ export async function executeNegotiation(
   }
 
   // Set match to "deciding" — waiting for human input
-  const deadline = new Date(Date.now() + roundRules.decisionTimerSeconds * 1000);
   await supabase
     .from("matches")
     .update({
       status: "deciding",
       current_turn: turn,
-      decision_deadline: deadline.toISOString(),
     })
     .eq("id", matchId);
 }
