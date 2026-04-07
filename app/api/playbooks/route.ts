@@ -90,7 +90,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const { personality, cooperateStrategy, betrayStrategy, secretWeapon, seasonId } = await req.json();
+  const { personality, cooperateStrategy, betrayStrategy, secretWeapon, negotiationGoal, seasonId } = await req.json();
 
   // Validate lengths
   if (personality && personality.length > 500) {
@@ -119,6 +119,7 @@ export async function PUT(req: NextRequest) {
         cooperate_strategy: cooperateStrategy || "",
         betray_strategy: betrayStrategy || "",
         secret_weapon: secretWeapon || "",
+        negotiation_goal: negotiationGoal || "",
         submitted_at: new Date().toISOString(),
         ready: false,
       },

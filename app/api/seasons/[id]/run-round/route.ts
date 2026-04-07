@@ -193,16 +193,17 @@ async function startNegotiations(
     // Get playbooks
     const { data: playbooks } = await supabase
       .from("playbooks")
-      .select("team_id, personality, cooperate_strategy, betray_strategy, secret_weapon")
+      .select("team_id, personality, cooperate_strategy, betray_strategy, secret_weapon, negotiation_goal")
       .eq("season_id", parseInt(seasonId));
 
-    const playbookMap: Record<string, { personality: string; cooperateStrategy: string; betrayStrategy: string; secretWeapon: string }> = {};
+    const playbookMap: Record<string, { personality: string; cooperateStrategy: string; betrayStrategy: string; secretWeapon: string; negotiationGoal: string }> = {};
     for (const pb of playbooks || []) {
       playbookMap[pb.team_id] = {
         personality: pb.personality,
         cooperateStrategy: pb.cooperate_strategy,
         betrayStrategy: pb.betray_strategy,
         secretWeapon: pb.secret_weapon,
+        negotiationGoal: pb.negotiation_goal || "",
       };
     }
 
@@ -211,6 +212,7 @@ async function startNegotiations(
       cooperateStrategy: "",
       betrayStrategy: "",
       secretWeapon: "",
+      negotiationGoal: "",
     };
 
     const teamMap: Record<string, { id: string; name: string }> = {};

@@ -145,7 +145,7 @@ export async function POST(
 
       const { data: playbooks } = await supabase
         .from("playbooks")
-        .select("team_id, personality, cooperate_strategy, betray_strategy, secret_weapon")
+        .select("team_id, personality, cooperate_strategy, betray_strategy, secret_weapon, negotiation_goal")
         .eq("season_id", match.season_id)
         .in("team_id", [match.team_a_id, match.team_b_id]);
 
@@ -157,13 +157,14 @@ export async function POST(
       const rankMap: Record<string, number> = {};
       for (const row of leaderboard || []) rankMap[row.team_id] = row.rank;
 
-      const playbookMap: Record<string, { personality: string; cooperateStrategy: string; betrayStrategy: string; secretWeapon: string }> = {};
+      const playbookMap: Record<string, { personality: string; cooperateStrategy: string; betrayStrategy: string; secretWeapon: string; negotiationGoal: string }> = {};
       for (const pb of playbooks || []) {
         playbookMap[pb.team_id] = {
           personality: pb.personality,
           cooperateStrategy: pb.cooperate_strategy,
           betrayStrategy: pb.betray_strategy,
           secretWeapon: pb.secret_weapon,
+          negotiationGoal: pb.negotiation_goal || "",
         };
       }
 
@@ -172,6 +173,7 @@ export async function POST(
         cooperateStrategy: "",
         betrayStrategy: "",
         secretWeapon: "",
+        negotiationGoal: "",
       };
 
       const teamA = teams?.find((t) => t.id === match.team_a_id);

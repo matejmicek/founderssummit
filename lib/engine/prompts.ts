@@ -5,6 +5,7 @@ export interface PlaybookFields {
   cooperateStrategy: string;
   betrayStrategy: string;
   secretWeapon: string;
+  negotiationGoal: string;
 }
 
 export interface PreviousTurnData {
@@ -124,14 +125,9 @@ Turn ${ctx.turnNumber} of ${ctx.totalTurns}. ${turnGuidance}
 
 ${payoffSection}
 
-YOUR PLAYBOOK:
-Personality: ${ctx.playbook.personality || "No personality defined — be neutral and strategic."}
-When to Cooperate: ${ctx.playbook.cooperateStrategy || "Cooperate by default, mirror opponent's behavior."}
-When to Betray: ${ctx.playbook.betrayStrategy || "Betray if opponent betrayed you last turn."}${
-    ctx.secretWeaponUnlocked && ctx.playbook.secretWeapon
-      ? `\nSecret Weapon: ${ctx.playbook.secretWeapon}`
-      : ""
-  }
+YOUR PERSONALITY:
+${ctx.playbook.personality || "You are a sharp, strategic negotiator. Read people well and adapt."}
+${ctx.playbook.negotiationGoal ? `\nNEGOTIATION GOAL: ${ctx.playbook.negotiationGoal}` : ""}
 ${previousText}${matchScore}
 
 ${ctx.historyText}
@@ -184,14 +180,8 @@ export function buildDecisionSystemPrompt(ctx: PromptContext): string {
 
 SCORES: mutual cooperate +3, mutual betray +1, sucker +0, temptation +5
 
-PLAYBOOK:
-Personality: ${ctx.playbook.personality || "Neutral"}
-When to Cooperate: ${ctx.playbook.cooperateStrategy || "Cooperate by default"}
-When to Betray: ${ctx.playbook.betrayStrategy || "Betray if opponent betrayed last turn"}${
-    ctx.secretWeaponUnlocked && ctx.playbook.secretWeapon
-      ? `\nSecret Weapon: ${ctx.playbook.secretWeapon}`
-      : ""
-  }
+PERSONALITY: ${ctx.playbook.personality || "Neutral, strategic"}
+${ctx.playbook.negotiationGoal ? `GOAL: ${ctx.playbook.negotiationGoal}` : ""}
 
 SITUATION:
 - Opponent: ${ctx.opponentName}

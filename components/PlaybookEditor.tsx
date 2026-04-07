@@ -145,6 +145,7 @@ export default function PlaybookEditor({
           cooperateStrategy: fields.cooperateStrategy,
           betrayStrategy: fields.betrayStrategy,
           secretWeapon: fields.secretWeapon,
+          negotiationGoal: fields.negotiationGoal,
           seasonId,
         }),
       });
