@@ -56,8 +56,10 @@ export default function PlaybookEditor({
           setIsSynced(true);
           lastSaveTimestamp.current = data.playbook.submitted_at || null;
         }
+        // Mark initial load complete — auto-save will now trigger on edits
+        setTimeout(() => { initialLoadDone.current = true; }, 100);
       })
-      .catch(() => {});
+      .catch(() => { initialLoadDone.current = true; });
   }, [seasonId]);
 
   // Supabase Realtime — sync from teammates
@@ -111,38 +113,27 @@ export default function PlaybookEditor({
   }, [seasonId, teamId]);
 
   // Auto-save with debounce
-  // Track if fields have been modified since last save
-  const hasEdited = useRef(false);
+  const initialLoadDone = useRef(false);
 
   useEffect(() => {
-    hasEdited.current = true;
+    // Skip the auto-save trigger during initial data load
+    if (!initialLoadDone.current) return;
+    if (!seasonId) return;
+
+    isDirty.current = true;
     setIsSynced(false);
 
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
 
     autoSaveTimer.current = setTimeout(() => {
-      if (hasEdited.current && seasonId) {
-        isDirty.current = true;
-        autoSave();
-        hasEdited.current = false;
-      }
+      if (isDirty.current) autoSave();
     }, 2000);
 
     return () => {
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [personality, cooperateStrategy, betrayStrategy, secretWeapon, negotiationGoal]);
-
-  // When seasonId arrives and there are pending edits, save immediately
-  useEffect(() => {
-    if (seasonId && hasEdited.current) {
-      isDirty.current = true;
-      autoSave();
-      hasEdited.current = false;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seasonId]);
+  }, [personality, cooperateStrategy, betrayStrategy, secretWeapon, negotiationGoal, seasonId]);
 
   const autoSave = async () => {
     if (!seasonId) return;
