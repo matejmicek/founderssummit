@@ -16,7 +16,9 @@ import {
   ChevronDown,
   Settings,
   ArrowLeft,
+  Zap,
 } from "lucide-react";
+import { DEFAULT_ROUND_RULES } from "@/lib/engine/rounds";
 
 interface Tournament {
   id: string;
@@ -34,6 +36,7 @@ interface Season {
   total_rounds: number;
   points_multiplier: number;
   round_status: string;
+  round_rules: Record<string, unknown> | null;
 }
 
 interface Team {
@@ -380,14 +383,30 @@ export default function AdminPage() {
           )}
           {phase === "ready_check" && (
             <>
-              <button
-                data-testid="run-matches-btn"
-                onClick={runRound}
-                disabled={!allReady}
-                className="btn-accent text-xs py-1.5 px-3"
-              >
-                {allReady ? `Run Matches (${(teams.length * (teams.length - 1)) / 2})` : `Waiting (${readyCount}/${teams.length})`}
-              </button>
+              {(() => {
+                const nextRound = (activeSeason?.current_round || 0) + 1;
+                const rules = DEFAULT_ROUND_RULES[nextRound] || DEFAULT_ROUND_RULES[5];
+                return (
+                  <>
+                    <button
+                      data-testid="run-matches-btn"
+                      onClick={runRound}
+                      disabled={!allReady}
+                      className="btn-accent text-xs py-1.5 px-3"
+                    >
+                      {allReady
+                        ? `Run Round ${nextRound}: ${rules.label} (${Math.floor(teams.length / 2)} matches)`
+                        : `Waiting (${readyCount}/${teams.length})`}
+                    </button>
+                    <span className="text-[10px] font-mono text-[var(--muted)]">
+                      {rules.noiseChance > 0 && <span className="text-yellow-500 mr-1">⚡ {Math.round(rules.noiseChance * 100)}% noise</span>}
+                      {rules.memoryEnabled && <span className="mr-1">🧠 memory</span>}
+                      {rules.secretWeaponEnabled && <span className="mr-1">🗡️ secret weapon</span>}
+                      {rules.eliminationCount > 0 && <span className="text-[var(--betray)]">☠️ eliminates {rules.eliminationCount}</span>}
+                    </span>
+                  </>
+                );
+              })()}
               <button onClick={() => updateSeasonStatus("building")} className="btn-ghost text-xs py-1.5 px-3">
                 Back to Building
               </button>
@@ -507,10 +526,16 @@ export default function AdminPage() {
         {phase === "running_matches" && activeSeason && (
           <div className="max-w-2xl mx-auto text-center" style={{ animation: "fade-in 0.4s ease-out" }}>
             <h2 className="projector-heading mb-2">
-              Agents Negotiating
+              {(() => {
+                const rules = activeSeason?.round_rules as { label?: string } | undefined;
+                return rules?.label ? `Round ${activeSeason?.current_round}: ${rules.label}` : "Agents Negotiating";
+              })()}
             </h2>
-            <p className="projector-subheading mb-10 font-mono">
-              {(teams.length * (teams.length - 1)) / 2} matches · 3 turns each
+            <p className="projector-subheading mb-4 font-mono">
+              {Math.floor(teams.length / 2)} matches · Teams decide each turn
+            </p>
+            <p className="text-sm text-[var(--muted)] mb-10">
+              Agents negotiate, then teams make the cooperate/betray decision live
             </p>
 
             {/* Progress ring */}

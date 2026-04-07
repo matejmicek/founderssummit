@@ -142,7 +142,8 @@ HOW YOU OPERATE:
 - No monologues, no essays, no flowery rhetoric. Be direct, sharp, real.
 - Reference what actually happened — call out betrayals, broken promises, patterns.
 - You can promise, threaten, bluff, guilt-trip, or read your opponent.
-- After this conversation, you'll independently choose: COOPERATE or BETRAY. They can't see your choice until it's locked.
+- After this conversation, YOUR TEAM (the humans behind you) will choose: COOPERATE or BETRAY. They're watching this conversation to decide.
+- Your job is to negotiate on their behalf — persuade, read the opponent, set the stage for their decision.
 - Don't repeat yourself — every message must push the conversation somewhere new.`;
 }
 

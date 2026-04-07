@@ -3,41 +3,44 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Check, Lock, Users, Wifi, WifiOff, CloudCheck } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
+import ArchetypeSelector from "./ArchetypeSelector";
 
 interface Props {
   seasonId: number | null;
   teamId: string;
   secretWeaponUnlocked: boolean;
+  roundNumber?: number;
 }
 
 export default function PlaybookEditor({
   seasonId,
   teamId,
   secretWeaponUnlocked,
+  roundNumber = 1,
 }: Props) {
   const [personality, setPersonality] = useState("");
+  const [negotiationGoal, setNegotiationGoal] = useState("");
+  const [secretWeapon, setSecretWeapon] = useState("");
+  const [archetype, setArchetype] = useState<string | null>(null);
+  // Keep legacy fields for backward compat with API
   const [cooperateStrategy, setCooperateStrategy] = useState("");
   const [betrayStrategy, setBetrayStrategy] = useState("");
-  const [secretWeapon, setSecretWeapon] = useState("");
   const [ready, setReady] = useState(false);
   const [togglingReady, setTogglingReady] = useState(false);
   const [isSynced, setIsSynced] = useState(true);
   const [syncStatus, setSyncStatus] = useState<"connected" | "disconnected" | "syncing">("disconnected");
   const [remoteUpdate, setRemoteUpdate] = useState(false);
 
-  // Refs to track local vs remote changes
   const lastSaveTimestamp = useRef<string | null>(null);
   const isLocalSave = useRef(false);
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
   const isDirty = useRef(false);
 
-  // Refs for current field values (to use in auto-save without stale closures)
-  const fieldsRef = useRef({ personality: "", cooperateStrategy: "", betrayStrategy: "", secretWeapon: "" });
+  const fieldsRef = useRef({ personality: "", cooperateStrategy: "", betrayStrategy: "", secretWeapon: "", negotiationGoal: "" });
 
-  // Keep refs in sync with state
   useEffect(() => {
-    fieldsRef.current = { personality, cooperateStrategy, betrayStrategy, secretWeapon };
-  }, [personality, cooperateStrategy, betrayStrategy, secretWeapon]);
+    fieldsRef.current = { personality, cooperateStrategy, betrayStrategy, secretWeapon, negotiationGoal };
+  }, [personality, cooperateStrategy, betrayStrategy, secretWeapon, negotiationGoal]);
 
   // Initial fetch
   useEffect(() => {
@@ -49,6 +52,8 @@ export default function PlaybookEditor({
           setCooperateStrategy(data.playbook.cooperate_strategy || "");
           setBetrayStrategy(data.playbook.betray_strategy || "");
           setSecretWeapon(data.playbook.secret_weapon || "");
+          setNegotiationGoal(data.playbook.negotiation_goal || "");
+          setArchetype(data.playbook.archetype || null);
           setReady(data.playbook.ready || false);
           setIsSynced(true);
           lastSaveTimestamp.current = data.playbook.submitted_at || null;
@@ -57,7 +62,7 @@ export default function PlaybookEditor({
       .catch(() => {});
   }, [seasonId]);
 
-  // Supabase Realtime subscription — sync edits from teammates
+  // Supabase Realtime — sync from teammates
   useEffect(() => {
     if (!seasonId || !teamId) return;
 
@@ -76,33 +81,29 @@ export default function PlaybookEditor({
           const row = payload.new as Record<string, unknown>;
           if (Number(row.season_id) !== seasonId) return;
 
-          // Skip if this was our own save
           if (isLocalSave.current) {
             isLocalSave.current = false;
             return;
           }
 
-          // Apply remote changes
           setPersonality(String(row.personality || ""));
           setCooperateStrategy(String(row.cooperate_strategy || ""));
           setBetrayStrategy(String(row.betray_strategy || ""));
           setSecretWeapon(String(row.secret_weapon || ""));
+          setNegotiationGoal(String(row.negotiation_goal || ""));
+          setArchetype(row.archetype ? String(row.archetype) : null);
           setReady(Boolean(row.ready));
           setIsSynced(true);
           isDirty.current = false;
           lastSaveTimestamp.current = String(row.submitted_at || "");
 
-          // Flash the "teammate updated" indicator
           setRemoteUpdate(true);
           setTimeout(() => setRemoteUpdate(false), 2000);
         }
       )
       .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          setSyncStatus("connected");
-        } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
-          setSyncStatus("disconnected");
-        }
+        if (status === "SUBSCRIBED") setSyncStatus("connected");
+        else if (status === "CLOSED" || status === "CHANNEL_ERROR") setSyncStatus("disconnected");
       });
 
     return () => {
@@ -111,30 +112,24 @@ export default function PlaybookEditor({
     };
   }, [seasonId, teamId]);
 
-  // Auto-save with debounce (2s after last keystroke)
+  // Auto-save with debounce
   useEffect(() => {
     if (!seasonId) return;
 
     isDirty.current = true;
     setIsSynced(false);
 
-    if (autoSaveTimer.current) {
-      clearTimeout(autoSaveTimer.current);
-    }
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
 
     autoSaveTimer.current = setTimeout(() => {
-      if (isDirty.current) {
-        autoSave();
-      }
+      if (isDirty.current) autoSave();
     }, 2000);
 
     return () => {
-      if (autoSaveTimer.current) {
-        clearTimeout(autoSaveTimer.current);
-      }
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [personality, cooperateStrategy, betrayStrategy, secretWeapon, seasonId]);
+  }, [personality, cooperateStrategy, betrayStrategy, secretWeapon, negotiationGoal, seasonId]);
 
   const autoSave = async () => {
     if (!seasonId) return;
@@ -181,21 +176,23 @@ export default function PlaybookEditor({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ready: !ready, seasonId }),
       });
-      if (res.ok) {
-        setReady(!ready);
-      } else {
-        isLocalSave.current = false;
-      }
+      if (res.ok) setReady(!ready);
+      else isLocalSave.current = false;
     } catch {
       isLocalSave.current = false;
     }
     setTogglingReady(false);
   }, [ready, seasonId]);
 
-  const hasContent =
-    personality.trim().length > 0 ||
-    cooperateStrategy.trim().length > 0 ||
-    betrayStrategy.trim().length > 0;
+  const handleArchetypeSelect = (personalityText: string, archetypeId: string) => {
+    setPersonality(personalityText);
+    setArchetype(archetypeId);
+  };
+
+  const hasContent = personality.trim().length > 0;
+
+  // Determine which fields to show based on round
+  const showNegotiationOnly = true; // In human-decision mode, no need for cooperate/betray strategy
 
   return (
     <div className="space-y-5">
@@ -225,10 +222,15 @@ export default function PlaybookEditor({
         )}
       </div>
 
-      {/* Personality */}
+      {/* Archetype quick-select (shown for Round 1 or when no personality set) */}
+      {(roundNumber <= 1 || !personality.trim()) && (
+        <ArchetypeSelector onSelect={handleArchetypeSelect} selectedId={archetype || undefined} />
+      )}
+
+      {/* Personality — always shown, the main field */}
       <div className="card p-4">
         <label className="flex items-center justify-between text-sm font-semibold text-[var(--foreground-secondary)] mb-2">
-          Personality & Style
+          Agent Personality
           <span className="font-mono text-xs tabular-nums text-[var(--muted)]">
             {personality.length}/500
           </span>
@@ -236,43 +238,29 @@ export default function PlaybookEditor({
         <textarea
           value={personality}
           onChange={(e) => setPersonality(e.target.value.slice(0, 500))}
-          placeholder="Who is your agent? How does it talk and negotiate?"
+          placeholder="Who is your agent? How does it talk, negotiate, and persuade? This defines your agent's character in negotiations."
           className="w-full bg-[var(--background)] border border-[var(--border)] rounded px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-glow)] transition-all placeholder:text-[var(--muted)]"
-          rows={3}
+          rows={4}
         />
+        <p className="text-[10px] text-[var(--muted)] mt-1.5">
+          Your agent negotiates on your behalf. <strong>Your team</strong> makes the final cooperate/betray decision each turn.
+        </p>
       </div>
 
-      {/* Cooperate */}
-      <div className="card p-4 border-l-[3px] border-l-[var(--cooperate)]">
-        <label className="flex items-center justify-between text-sm font-semibold text-[var(--cooperate)] mb-2">
-          When to Cooperate
+      {/* Negotiation guidance — optional */}
+      <div className="card p-4 border-l-[3px] border-l-[var(--accent)]">
+        <label className="flex items-center justify-between text-sm font-semibold text-[var(--accent)] mb-2">
+          Negotiation Goal
           <span className="font-mono text-xs tabular-nums text-[var(--muted)]">
-            {cooperateStrategy.length}/300
+            {negotiationGoal.length}/300
           </span>
         </label>
         <textarea
-          value={cooperateStrategy}
-          onChange={(e) => setCooperateStrategy(e.target.value.slice(0, 300))}
-          placeholder="Under what conditions should your agent cooperate?"
-          className="w-full bg-[var(--background)] border border-[var(--border)] rounded px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-[var(--cooperate)] transition-all placeholder:text-[var(--muted)]"
-          rows={3}
-        />
-      </div>
-
-      {/* Betray */}
-      <div className="card p-4 border-l-[3px] border-l-[var(--betray)]">
-        <label className="flex items-center justify-between text-sm font-semibold text-[var(--betray)] mb-2">
-          When to Betray
-          <span className="font-mono text-xs tabular-nums text-[var(--muted)]">
-            {betrayStrategy.length}/300
-          </span>
-        </label>
-        <textarea
-          value={betrayStrategy}
-          onChange={(e) => setBetrayStrategy(e.target.value.slice(0, 300))}
-          placeholder="Under what conditions should your agent betray?"
-          className="w-full bg-[var(--background)] border border-[var(--border)] rounded px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-[var(--betray)] transition-all placeholder:text-[var(--muted)]"
-          rows={3}
+          value={negotiationGoal}
+          onChange={(e) => setNegotiationGoal(e.target.value.slice(0, 300))}
+          placeholder="Optional: What should your agent try to achieve in negotiations? e.g., 'Build trust early, then read their intentions' or 'Intimidate them into cooperating'"
+          className="w-full bg-[var(--background)] border border-[var(--border)] rounded px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-[var(--accent)] transition-all placeholder:text-[var(--muted)]"
+          rows={2}
         />
       </div>
 
@@ -281,7 +269,7 @@ export default function PlaybookEditor({
         <label className="flex items-center justify-between text-sm font-semibold text-[var(--foreground-secondary)] mb-2">
           <span className="flex items-center gap-1.5">
             {!secretWeaponUnlocked && <Lock size={14} />}
-            Secret Weapon {!secretWeaponUnlocked && "— Unlocks Season 2"}
+            Secret Weapon {!secretWeaponUnlocked && "— Unlocks Round 3"}
           </span>
           <span className="font-mono text-xs tabular-nums text-[var(--muted)]">
             {secretWeapon.length}/100
@@ -290,7 +278,7 @@ export default function PlaybookEditor({
         <textarea
           value={secretWeapon}
           onChange={(e) => setSecretWeapon(e.target.value.slice(0, 100))}
-          placeholder="Your wildcard move..."
+          placeholder="A special twist for your agent's negotiation style..."
           disabled={!secretWeaponUnlocked}
           className="w-full bg-[var(--background)] border border-[var(--border)] rounded px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-[var(--accent)] transition-all placeholder:text-[var(--muted)] disabled:cursor-not-allowed"
           rows={2}

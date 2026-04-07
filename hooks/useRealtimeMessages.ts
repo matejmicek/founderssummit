@@ -9,6 +9,7 @@ interface Message {
   team_id: string;
   content: string;
   sequence: number;
+  turn: number;
 }
 
 export function useRealtimeMessages(matchId: string | null) {

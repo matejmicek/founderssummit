@@ -10,6 +10,23 @@ export interface MatchScore {
   teamBScore: number;
 }
 
+/**
+ * Apply noise: random chance of flipping a decision.
+ * Returns the effective decision and whether it was flipped.
+ */
+export function applyNoise(
+  decision: Decision,
+  noiseChance: number
+): { effective: Decision; flipped: boolean } {
+  if (noiseChance <= 0 || Math.random() >= noiseChance) {
+    return { effective: decision, flipped: false };
+  }
+  return {
+    effective: decision === "cooperate" ? "betray" : "cooperate",
+    flipped: true,
+  };
+}
+
 export function calculateScore(
   teamADecision: Decision,
   teamBDecision: Decision,
