@@ -111,23 +111,38 @@ export default function PlaybookEditor({
   }, [seasonId, teamId]);
 
   // Auto-save with debounce
-  useEffect(() => {
-    if (!seasonId) return;
+  // Track if fields have been modified since last save
+  const hasEdited = useRef(false);
 
-    isDirty.current = true;
+  useEffect(() => {
+    hasEdited.current = true;
     setIsSynced(false);
 
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
 
     autoSaveTimer.current = setTimeout(() => {
-      if (isDirty.current) autoSave();
+      if (hasEdited.current && seasonId) {
+        isDirty.current = true;
+        autoSave();
+        hasEdited.current = false;
+      }
     }, 2000);
 
     return () => {
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [personality, cooperateStrategy, betrayStrategy, secretWeapon, negotiationGoal, seasonId]);
+  }, [personality, cooperateStrategy, betrayStrategy, secretWeapon, negotiationGoal]);
+
+  // When seasonId arrives and there are pending edits, save immediately
+  useEffect(() => {
+    if (seasonId && hasEdited.current) {
+      isDirty.current = true;
+      autoSave();
+      hasEdited.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seasonId]);
 
   const autoSave = async () => {
     if (!seasonId) return;
