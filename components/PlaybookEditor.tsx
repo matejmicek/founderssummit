@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Check, Users, Wifi, WifiOff, CloudCheck } from "lucide-react";
+import { Check, Users, Wifi, WifiOff, Save } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
 import ArchetypeSelector from "./ArchetypeSelector";
 
@@ -18,27 +18,19 @@ export default function PlaybookEditor({
 }: Props) {
   const [personality, setPersonality] = useState("");
   const [negotiationGoal, setNegotiationGoal] = useState("");
-  const [secretWeapon, setSecretWeapon] = useState("");
-  const [archetype, setArchetype] = useState<string | null>(null);
-  // Keep legacy fields for backward compat with API
   const [cooperateStrategy, setCooperateStrategy] = useState("");
   const [betrayStrategy, setBetrayStrategy] = useState("");
+  const [secretWeapon, setSecretWeapon] = useState("");
+  const [archetype, setArchetype] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [togglingReady, setTogglingReady] = useState(false);
   const [isSynced, setIsSynced] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState<"connected" | "disconnected" | "syncing">("disconnected");
   const [remoteUpdate, setRemoteUpdate] = useState(false);
 
-  const lastSaveTimestamp = useRef<string | null>(null);
   const isLocalSave = useRef(false);
-  const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
-  const isDirty = useRef(false);
-
-  const fieldsRef = useRef({ personality: "", cooperateStrategy: "", betrayStrategy: "", secretWeapon: "", negotiationGoal: "" });
-
-  useEffect(() => {
-    fieldsRef.current = { personality, cooperateStrategy, betrayStrategy, secretWeapon, negotiationGoal };
-  }, [personality, cooperateStrategy, betrayStrategy, secretWeapon, negotiationGoal]);
+  const loaded = useRef(false);
 
   // Initial fetch
   useEffect(() => {
@@ -53,14 +45,17 @@ export default function PlaybookEditor({
           setNegotiationGoal(data.playbook.negotiation_goal || "");
           setArchetype(data.playbook.archetype || null);
           setReady(data.playbook.ready || false);
-          setIsSynced(true);
-          lastSaveTimestamp.current = data.playbook.submitted_at || null;
         }
-        // Mark initial load complete — auto-save will now trigger on edits
-        setTimeout(() => { initialLoadDone.current = true; }, 100);
+        loaded.current = true;
       })
-      .catch(() => { initialLoadDone.current = true; });
+      .catch(() => { loaded.current = true; });
   }, [seasonId]);
+
+  // Track unsaved changes
+  useEffect(() => {
+    if (!loaded.current) return;
+    setIsSynced(false);
+  }, [personality, negotiationGoal]);
 
   // Supabase Realtime — sync from teammates
   useEffect(() => {
@@ -94,8 +89,6 @@ export default function PlaybookEditor({
           setArchetype(row.archetype ? String(row.archetype) : null);
           setReady(Boolean(row.ready));
           setIsSynced(true);
-          isDirty.current = false;
-          lastSaveTimestamp.current = String(row.submitted_at || "");
 
           setRemoteUpdate(true);
           setTimeout(() => setRemoteUpdate(false), 2000);
@@ -112,33 +105,10 @@ export default function PlaybookEditor({
     };
   }, [seasonId, teamId]);
 
-  // Auto-save with debounce
-  const initialLoadDone = useRef(false);
+  const save = useCallback(async () => {
+    if (!seasonId || isSaving) return;
 
-  useEffect(() => {
-    // Skip the auto-save trigger during initial data load
-    if (!initialLoadDone.current) return;
-    if (!seasonId) return;
-
-    isDirty.current = true;
-    setIsSynced(false);
-
-    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-
-    autoSaveTimer.current = setTimeout(() => {
-      if (isDirty.current) autoSave();
-    }, 2000);
-
-    return () => {
-      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [personality, cooperateStrategy, betrayStrategy, secretWeapon, negotiationGoal, seasonId]);
-
-  const autoSave = async () => {
-    if (!seasonId) return;
-
-    const fields = fieldsRef.current;
+    setIsSaving(true);
     setSyncStatus("syncing");
     isLocalSave.current = true;
 
@@ -147,17 +117,16 @@ export default function PlaybookEditor({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          personality: fields.personality,
-          cooperateStrategy: fields.cooperateStrategy,
-          betrayStrategy: fields.betrayStrategy,
-          secretWeapon: fields.secretWeapon,
-          negotiationGoal: fields.negotiationGoal,
+          personality,
+          cooperateStrategy,
+          betrayStrategy,
+          secretWeapon,
+          negotiationGoal,
           seasonId,
         }),
       });
 
       if (res.ok) {
-        isDirty.current = false;
         setReady(false);
         setIsSynced(true);
         setSyncStatus("connected");
@@ -169,10 +138,15 @@ export default function PlaybookEditor({
       isLocalSave.current = false;
       setSyncStatus("connected");
     }
-  };
+    setIsSaving(false);
+  }, [seasonId, personality, cooperateStrategy, betrayStrategy, secretWeapon, negotiationGoal, isSaving]);
 
   const toggleReady = useCallback(async () => {
     if (!seasonId) return;
+
+    // Save first if unsaved
+    if (!isSynced) await save();
+
     setTogglingReady(true);
     isLocalSave.current = true;
     try {
@@ -187,7 +161,7 @@ export default function PlaybookEditor({
       isLocalSave.current = false;
     }
     setTogglingReady(false);
-  }, [ready, seasonId]);
+  }, [ready, seasonId, isSynced, save]);
 
   const handleArchetypeSelect = (personalityText: string, archetypeId: string) => {
     setPersonality(personalityText);
@@ -195,9 +169,6 @@ export default function PlaybookEditor({
   };
 
   const hasContent = personality.trim().length > 0;
-
-  // Determine which fields to show based on round
-  const showNegotiationOnly = true; // In human-decision mode, no need for cooperate/betray strategy
 
   return (
     <div className="space-y-5">
@@ -227,12 +198,12 @@ export default function PlaybookEditor({
         )}
       </div>
 
-      {/* Archetype quick-select (shown for Round 1 or when no personality set) */}
+      {/* Archetype quick-select */}
       {(roundNumber <= 1 || !personality.trim()) && (
         <ArchetypeSelector onSelect={handleArchetypeSelect} selectedId={archetype || undefined} />
       )}
 
-      {/* Personality — always shown, the main field */}
+      {/* Personality */}
       <div className="card p-4">
         <label className="flex items-center justify-between text-sm font-semibold text-[var(--foreground-secondary)] mb-2">
           Agent Personality
@@ -252,7 +223,7 @@ export default function PlaybookEditor({
         </p>
       </div>
 
-      {/* Negotiation guidance — optional */}
+      {/* Negotiation goal */}
       <div className="card p-4 border-l-[3px] border-l-[var(--accent)]">
         <label className="flex items-center justify-between text-sm font-semibold text-[var(--accent)] mb-2">
           Negotiation Goal
@@ -270,32 +241,36 @@ export default function PlaybookEditor({
       </div>
 
       {/* Action area */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={toggleReady}
-          disabled={togglingReady || !seasonId || !hasContent || !isSynced}
-          className={`text-sm font-semibold rounded px-5 py-2.5 transition-all flex items-center gap-2 ${
-            ready
-              ? "bg-[var(--cooperate)] text-white shadow-sm"
-              : "btn-ghost"
-          } disabled:opacity-40 disabled:cursor-not-allowed`}
-        >
-          <Check size={14} />
-          {ready ? "Ready!" : "Mark Ready"}
-        </button>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={save}
+            disabled={isSaving || !seasonId || isSynced}
+            className="text-sm font-semibold rounded px-4 py-2.5 transition-all flex items-center gap-2 btn-ghost disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Save size={14} />
+            {isSaving ? "Saving..." : "Save"}
+          </button>
 
-        <div className="flex items-center gap-1.5 text-xs font-mono">
-          {isSynced ? (
-            <span className="flex items-center gap-1 text-[var(--cooperate)]">
-              <CloudCheck size={14} />
-              Saved
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 text-[var(--muted)] animate-pulse">
-              Saving...
-            </span>
-          )}
+          <button
+            onClick={toggleReady}
+            disabled={togglingReady || !seasonId || !hasContent}
+            className={`text-sm font-semibold rounded px-5 py-2.5 transition-all flex items-center gap-2 ${
+              ready
+                ? "bg-[var(--cooperate)] text-white shadow-sm"
+                : "btn-ghost"
+            } disabled:opacity-40 disabled:cursor-not-allowed`}
+          >
+            <Check size={14} />
+            {ready ? "Ready!" : "Mark Ready"}
+          </button>
         </div>
+
+        {!isSynced && (
+          <span className="text-[10px] font-mono text-[var(--accent)]">
+            Unsaved changes
+          </span>
+        )}
       </div>
 
       {ready && (
