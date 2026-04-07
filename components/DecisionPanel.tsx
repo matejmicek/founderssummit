@@ -380,27 +380,20 @@ export default function DecisionPanel({
           </div>
         </div>
 
-        {/* Previous turn results */}
+        {/* Previous turn results — show team_a on left, team_b on right to match header */}
         {previousTurns.length > 0 && (
-          <div className="flex gap-2 justify-center mt-2">
-            {previousTurns.map((t, i) => {
-              const myDec = isTeamA ? t.team_a_decision : t.team_b_decision;
-              const theirDec = isTeamA ? t.team_b_decision : t.team_a_decision;
-              return (
-                <div key={i} className="text-center">
-                  <div className="text-[10px] font-mono text-[var(--muted)]">T{i + 1}</div>
-                  <div className="flex gap-1">
-                    <span className={`text-xs font-bold ${myDec === "cooperate" ? "text-[var(--cooperate)]" : "text-[var(--betray)]"}`}>
-                      {myDec === "cooperate" ? "C" : "B"}
-                    </span>
-                    <span className="text-[var(--muted)] text-xs">/</span>
-                    <span className={`text-xs font-bold ${theirDec === "cooperate" ? "text-[var(--cooperate)]" : "text-[var(--betray)]"}`}>
-                      {theirDec === "cooperate" ? "C" : "B"}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="mt-2 space-y-1">
+            {previousTurns.map((t, i) => (
+              <div key={i} className="flex items-center justify-between text-xs font-mono px-1">
+                <span className={`font-bold ${t.team_a_decision === "cooperate" ? "text-[var(--cooperate)]" : "text-[var(--betray)]"}`}>
+                  {t.team_a_decision === "cooperate" ? "cooperate" : "betray"}
+                </span>
+                <span className="text-[var(--muted)]">T{i + 1}</span>
+                <span className={`font-bold ${t.team_b_decision === "cooperate" ? "text-[var(--cooperate)]" : "text-[var(--betray)]"}`}>
+                  {t.team_b_decision === "cooperate" ? "cooperate" : "betray"}
+                </span>
+              </div>
+            ))}
           </div>
         )}
 
@@ -418,40 +411,42 @@ export default function DecisionPanel({
           </button>
 
           {showHistory && (
-            <div className="mt-3 space-y-2">
+            <div className="mt-3 space-y-1.5">
+              {/* Header row with team names */}
+              <div className="flex items-center justify-between text-[10px] font-mono text-[var(--muted)] uppercase tracking-wider px-1">
+                <span>{myName}</span>
+                <span>{opponentName}</span>
+              </div>
               {encounterHistory.map((h, i) => (
-                <div key={i} className="flex items-center gap-3 text-xs">
-                  <span className="font-mono font-bold text-[var(--muted)] w-8 shrink-0">R{h.round}</span>
-                  <div className="flex gap-1">
-                    {h.myDecisions.map((d, j) => {
-                      const their = h.theirDecisions[j];
-                      return (
-                        <div key={j} className="text-center">
-                          <div className="flex gap-0.5">
-                            <span className={`font-bold ${d === "cooperate" ? "text-[var(--cooperate)]" : "text-[var(--betray)]"}`}>
-                              {d === "cooperate" ? "C" : "B"}
-                            </span>
-                            <span className="text-[var(--muted)]">/</span>
-                            <span className={`font-bold ${their === "cooperate" ? "text-[var(--cooperate)]" : "text-[var(--betray)]"}`}>
-                              {their === "cooperate" ? "C" : "B"}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                <div key={i} className="space-y-0.5">
+                  <div className="flex items-center justify-between text-[10px] font-mono text-[var(--muted)] px-1">
+                    <span></span>
+                    <span>Round {h.round}</span>
+                    <span></span>
                   </div>
-                  <span className="font-mono ml-auto tabular-nums">
-                    <span className={h.myScore >= h.theirScore ? "text-[var(--cooperate)] font-bold" : "text-[var(--muted)]"}>{h.myScore}</span>
-                    <span className="text-[var(--muted)]">-</span>
-                    <span className={h.theirScore >= h.myScore ? "text-[var(--betray)] font-bold" : "text-[var(--muted)]"}>{h.theirScore}</span>
-                  </span>
+                  {h.myDecisions.map((d, j) => {
+                    const their = h.theirDecisions[j];
+                    return (
+                      <div key={j} className="flex items-center justify-between text-xs font-mono px-1">
+                        <span className={`font-bold ${d === "cooperate" ? "text-[var(--cooperate)]" : "text-[var(--betray)]"}`}>
+                          {d === "cooperate" ? "cooperate" : "betray"}
+                        </span>
+                        <span className="text-[var(--muted)]">T{j + 1}</span>
+                        <span className={`font-bold ${their === "cooperate" ? "text-[var(--cooperate)]" : "text-[var(--betray)]"}`}>
+                          {their === "cooperate" ? "cooperate" : "betray"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  <div className="flex justify-between text-xs font-mono font-bold px-1 pb-1">
+                    <span>{h.myScore}pts</span>
+                    <span>{h.theirScore}pts</span>
+                  </div>
                 </div>
               ))}
-              <div className="border-t border-[var(--border)] pt-1.5 flex justify-between text-xs font-mono">
-                <span className="text-[var(--muted)]">Total</span>
-                <span className="font-bold">
-                  {encounterHistory.reduce((s, h) => s + h.myScore, 0)}-{encounterHistory.reduce((s, h) => s + h.theirScore, 0)}
-                </span>
+              <div className="border-t border-[var(--border)] pt-1.5 flex justify-between text-xs font-mono font-bold px-1">
+                <span>{encounterHistory.reduce((s, h) => s + h.myScore, 0)}pts total</span>
+                <span>{encounterHistory.reduce((s, h) => s + h.theirScore, 0)}pts total</span>
               </div>
             </div>
           )}
