@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
 import { createBrowserClient } from "@/lib/supabase";
-import { ShieldCheck, Skull, Clock, Zap, Volume2 } from "lucide-react";
+import { ShieldCheck, Skull, Clock, Zap } from "lucide-react";
 
 interface Props {
   matchId: string;
@@ -18,7 +18,10 @@ interface Props {
   turnsPerMatch: number;
   decisionDeadline: string | null;
   noiseChance: number;
+  matchIndex?: number;      // e.g. 1
+  totalMatches?: number;    // e.g. 2
   onTurnComplete?: () => void;
+  onMatchComplete?: () => void;
 }
 
 type Phase = "watching" | "deciding" | "waiting" | "revealing" | "revealed";
@@ -45,7 +48,10 @@ export default function DecisionPanel({
   turnsPerMatch,
   decisionDeadline,
   noiseChance,
+  matchIndex,
+  totalMatches,
   onTurnComplete,
+  onMatchComplete,
 }: Props) {
   const [phase, setPhase] = useState<Phase>("watching");
   const [myDecision, setMyDecision] = useState<string | null>(null);
@@ -55,6 +61,35 @@ export default function DecisionPanel({
   const [submitting, setSubmitting] = useState(false);
   const [previousTurns, setPreviousTurns] = useState<TurnResult[]>([]);
   const audioRef = useRef<AudioContext | null>(null);
+
+  // Reset ALL state when matchId changes (switching to a different opponent)
+  const prevMatchIdRef = useRef(matchId);
+  useEffect(() => {
+    if (prevMatchIdRef.current !== matchId) {
+      prevMatchIdRef.current = matchId;
+      setPhase("watching");
+      setMyDecision(null);
+      setTimeLeft(20);
+      setTurnResult(null);
+      setRevealCountdown(null);
+      setSubmitting(false);
+      setPreviousTurns([]);
+    }
+  }, [matchId]);
+
+  // Also reset decision state when currentTurn changes (next turn within same match)
+  const prevTurnRef = useRef(currentTurn);
+  useEffect(() => {
+    if (prevTurnRef.current !== currentTurn) {
+      prevTurnRef.current = currentTurn;
+      setPhase("watching");
+      setMyDecision(null);
+      setTimeLeft(20);
+      setTurnResult(null);
+      setRevealCountdown(null);
+      setSubmitting(false);
+    }
+  }, [currentTurn]);
 
   const isTeamA = teamId === teamAId;
   const myName = isTeamA ? teamAName : teamBName;
@@ -73,11 +108,25 @@ export default function DecisionPanel({
       .eq("id", matchId)
       .single()
       .then(({ data }) => {
-        if (data?.status === "deciding" && phase === "watching") {
-          setPhase("deciding");
+        if (data?.status === "deciding") {
+          // Check if we already submitted for this turn
+          supabase
+            .from("team_decisions")
+            .select("id")
+            .eq("match_id", matchId)
+            .eq("turn", currentTurn)
+            .eq("team_id", teamId)
+            .maybeSingle()
+            .then(({ data: existing }) => {
+              if (existing) {
+                setPhase("waiting");
+              } else {
+                setPhase("deciding");
+              }
+            });
         }
       });
-  }, [matchId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [matchId, currentTurn, teamId]);
 
   // Load previous turn results
   useEffect(() => {
@@ -108,7 +157,6 @@ export default function DecisionPanel({
         (payload) => {
           const row = payload.new as Record<string, unknown>;
           if (Number(row.turn) === currentTurn) {
-            // Start reveal sequence
             setRevealCountdown(3);
             setTurnResult(row as unknown as TurnResult);
           }
@@ -119,7 +167,7 @@ export default function DecisionPanel({
     return () => { supabase.removeChannel(channel); };
   }, [matchId, currentTurn]);
 
-  // Detect when match enters deciding phase
+  // Detect match status changes via Realtime
   useEffect(() => {
     const supabase = createBrowserClient();
     const channel = supabase
@@ -137,19 +185,18 @@ export default function DecisionPanel({
           if (row.status === "deciding" && phase === "watching") {
             setPhase("deciding");
           }
-          if (row.status === "talking" && Number(row.current_turn) > currentTurn) {
-            // New turn started
-            onTurnComplete?.();
-          }
           if (row.status === "completed") {
-            onTurnComplete?.();
+            // Match done — notify parent after a brief delay for the reveal to show
+            setTimeout(() => {
+              onMatchComplete?.();
+            }, 3000);
           }
         }
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [matchId, currentTurn, phase, onTurnComplete]);
+  }, [matchId, phase, onMatchComplete]);
 
   // Decision timer countdown
   useEffect(() => {
@@ -160,7 +207,6 @@ export default function DecisionPanel({
       setTimeLeft(remaining);
 
       if (remaining <= 0 && !myDecision) {
-        // Auto-submit cooperate on timeout
         submitDecision("cooperate");
       }
     };
@@ -177,6 +223,19 @@ export default function DecisionPanel({
     if (revealCountdown <= 0) {
       setPhase("revealed");
       playRevealSound(turnResult);
+
+      // After reveal, check if match is complete or more turns
+      if (currentTurn >= turnsPerMatch) {
+        // Final turn — signal match complete after reveal display
+        setTimeout(() => {
+          onMatchComplete?.();
+        }, 3000);
+      } else {
+        // More turns — signal turn complete so parent re-polls
+        setTimeout(() => {
+          onTurnComplete?.();
+        }, 2000);
+      }
       return;
     }
 
@@ -185,7 +244,7 @@ export default function DecisionPanel({
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [revealCountdown, turnResult]);
+  }, [revealCountdown, turnResult, currentTurn, turnsPerMatch, onTurnComplete, onMatchComplete]);
 
   // Sound effects
   const playRevealSound = useCallback((result: TurnResult | null) => {
@@ -200,20 +259,18 @@ export default function DecisionPanel({
       osc.connect(gain);
       gain.connect(ctx.destination);
 
-      const myDecision = isTeamA ? result.team_a_decision : result.team_b_decision;
-      const theirDecision = isTeamA ? result.team_b_decision : result.team_a_decision;
+      const myDec = isTeamA ? result.team_a_decision : result.team_b_decision;
+      const theirDec = isTeamA ? result.team_b_decision : result.team_a_decision;
 
-      if (myDecision === "cooperate" && theirDecision === "cooperate") {
-        // Harmonious chime
-        osc.frequency.setValueAtTime(523, ctx.currentTime); // C5
-        osc.frequency.setValueAtTime(659, ctx.currentTime + 0.15); // E5
-        osc.frequency.setValueAtTime(784, ctx.currentTime + 0.3); // G5
+      if (myDec === "cooperate" && theirDec === "cooperate") {
+        osc.frequency.setValueAtTime(523, ctx.currentTime);
+        osc.frequency.setValueAtTime(659, ctx.currentTime + 0.15);
+        osc.frequency.setValueAtTime(784, ctx.currentTime + 0.3);
         gain.gain.setValueAtTime(0.3, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.8);
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.8);
-      } else if (myDecision === "betray" && theirDecision === "betray") {
-        // Low thud
+      } else if (myDec === "betray" && theirDec === "betray") {
         osc.frequency.setValueAtTime(110, ctx.currentTime);
         osc.type = "sawtooth";
         gain.gain.setValueAtTime(0.4, ctx.currentTime);
@@ -221,7 +278,6 @@ export default function DecisionPanel({
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.5);
       } else {
-        // Sharp crack (betrayal)
         osc.frequency.setValueAtTime(880, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.2);
         osc.type = "square";
@@ -251,7 +307,7 @@ export default function DecisionPanel({
       if (data.waiting) {
         setPhase("waiting");
       }
-      // If both decided, the Realtime subscription will trigger the reveal
+      // If both decided, Realtime subscription triggers the reveal
     } catch (err) {
       console.error("Failed to submit decision:", err);
       setMyDecision(null);
@@ -269,6 +325,27 @@ export default function DecisionPanel({
 
   return (
     <div className="space-y-4">
+      {/* Match progress indicator (when playing multiple opponents) */}
+      {totalMatches && totalMatches > 1 && matchIndex && (
+        <div className="flex items-center justify-center gap-2">
+          {Array.from({ length: totalMatches }, (_, i) => (
+            <div
+              key={i}
+              className={`h-2 flex-1 rounded-full transition-all ${
+                i + 1 < matchIndex
+                  ? "bg-[var(--cooperate)]"
+                  : i + 1 === matchIndex
+                  ? "bg-[var(--accent)]"
+                  : "bg-[var(--border)]"
+              }`}
+            />
+          ))}
+          <span className="text-[10px] font-mono text-[var(--muted)] ml-1">
+            Opponent {matchIndex}/{totalMatches}
+          </span>
+        </div>
+      )}
+
       {/* Match header */}
       <div className="card p-4">
         <div className="flex items-center justify-between mb-2">
@@ -437,7 +514,6 @@ export default function DecisionPanel({
       {phase === "revealed" && turnResult && (
         <div className="space-y-3" style={{ animation: "fade-in 0.5s ease-out" }}>
           <div className="grid grid-cols-2 gap-3">
-            {/* Team A reveal */}
             <div className={`card p-4 text-center border-2 ${
               turnResult.team_a_decision === "cooperate"
                 ? "border-[var(--cooperate)] bg-[var(--cooperate-bg)]"
@@ -457,7 +533,6 @@ export default function DecisionPanel({
               )}
             </div>
 
-            {/* Team B reveal */}
             <div className={`card p-4 text-center border-2 ${
               turnResult.team_b_decision === "cooperate"
                 ? "border-[var(--cooperate)] bg-[var(--cooperate-bg)]"
@@ -479,8 +554,18 @@ export default function DecisionPanel({
           </div>
 
           {currentTurn < turnsPerMatch && (
-            <p className="text-center text-xs text-[var(--muted)] font-mono">
+            <p className="text-center text-xs text-[var(--muted)] font-mono animate-pulse">
               Next turn starting...
+            </p>
+          )}
+          {currentTurn >= turnsPerMatch && totalMatches && matchIndex && matchIndex < totalMatches && (
+            <p className="text-center text-sm font-mono text-[var(--accent)] font-bold animate-pulse">
+              Switching to next opponent...
+            </p>
+          )}
+          {currentTurn >= turnsPerMatch && (!totalMatches || !matchIndex || matchIndex >= (totalMatches || 1)) && (
+            <p className="text-center text-sm font-mono text-[var(--cooperate)] font-bold">
+              Match complete!
             </p>
           )}
         </div>

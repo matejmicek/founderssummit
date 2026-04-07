@@ -86,3 +86,39 @@ export function getSwissMatchups(
 
   return matchups;
 }
+
+/**
+ * Double Swiss: each team plays 2 opponents per round.
+ * First pass: standard Swiss pairing (1 match each).
+ * Second pass: pair everyone again with a different opponent.
+ * Guarantees every team plays exactly 2 matches per round.
+ */
+export function getDoubleSwissMatchups(
+  teamIds: string[],
+  previousOpponents: Record<string, Set<string>> = {}
+): { teamAId: string; teamBId: string }[] {
+  if (teamIds.length < 3) {
+    // With 2 teams, they just play each other (can't do 2 different opponents)
+    return getSwissMatchups(teamIds, previousOpponents);
+  }
+
+  // First round of pairings
+  const firstRound = getSwissMatchups(teamIds, previousOpponents);
+
+  // Build set of who played who in first round
+  const firstRoundPairs: Record<string, Set<string>> = {};
+  for (const id of teamIds) {
+    firstRoundPairs[id] = new Set(previousOpponents[id] || []);
+  }
+  for (const m of firstRound) {
+    firstRoundPairs[m.teamAId] = firstRoundPairs[m.teamAId] || new Set();
+    firstRoundPairs[m.teamBId] = firstRoundPairs[m.teamBId] || new Set();
+    firstRoundPairs[m.teamAId].add(m.teamBId);
+    firstRoundPairs[m.teamBId].add(m.teamAId);
+  }
+
+  // Second round: pair with different opponents
+  const secondRound = getSwissMatchups(teamIds, firstRoundPairs);
+
+  return [...firstRound, ...secondRound];
+}

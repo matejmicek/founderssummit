@@ -47,6 +47,9 @@ export default function TeamPage({
   const [resolved, setResolved] = useState(false);
   const [resolveError, setResolveError] = useState("");
   const [activeMatch, setActiveMatch] = useState<ActiveMatch | null>(null);
+  const [matchIndex, setMatchIndex] = useState(1);
+  const [totalMatches, setTotalMatches] = useState(1);
+  const [completedMatchIds, setCompletedMatchIds] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   // Resolve team from join code
@@ -90,46 +93,66 @@ export default function TeamPage({
 
     const supabase = createBrowserClient();
 
-    // First get the match
-    const { data: matches } = await supabase
+    // Get ALL matches for this team in this season (to know total count)
+    const { data: allMyMatches } = await supabase
       .from("matches")
-      .select("id, team_a_id, team_b_id, status")
+      .select("id, status")
       .eq("season_id", seasonId)
       .or(`team_a_id.eq.${teamId},team_b_id.eq.${teamId}`)
-      .in("status", ["talking", "deciding"])
-      .limit(1);
+      .order("created_at", { ascending: true });
 
-    if (matches && matches.length > 0) {
-      const m = matches[0];
+    if (!allMyMatches || allMyMatches.length === 0) {
+      setActiveMatch(null);
+      return;
+    }
 
-      // Fetch team names separately (avoids FK join issues)
+    setTotalMatches(allMyMatches.length);
+
+    // Count completed ones
+    const completed = allMyMatches.filter((m) => m.status === "completed" || m.status === "error");
+    const newCompletedIds = new Set(completed.map((m) => m.id));
+    setCompletedMatchIds(newCompletedIds);
+    setMatchIndex(completed.length + 1);
+
+    // Find first non-completed match (talking or deciding)
+    const active = allMyMatches.find((m) => m.status === "talking" || m.status === "deciding");
+
+    if (active) {
+      // Fetch team names
+      const { data: matchData } = await supabase
+        .from("matches")
+        .select("team_a_id, team_b_id")
+        .eq("id", active.id)
+        .single();
+
+      if (!matchData) { setActiveMatch(null); return; }
+
       const { data: teamA } = await supabase
         .from("teams")
         .select("name, color")
-        .eq("id", m.team_a_id)
+        .eq("id", matchData.team_a_id)
         .single();
       const { data: teamB } = await supabase
         .from("teams")
         .select("name, color")
-        .eq("id", m.team_b_id)
+        .eq("id", matchData.team_b_id)
         .single();
 
-      // Count turns to determine current turn
       const { count: turnCount } = await supabase
         .from("match_turns")
         .select("id", { count: "exact", head: true })
-        .eq("match_id", m.id);
+        .eq("match_id", active.id);
 
       setActiveMatch({
-        id: m.id,
-        team_a_id: m.team_a_id,
-        team_b_id: m.team_b_id,
+        id: active.id,
+        team_a_id: matchData.team_a_id,
+        team_b_id: matchData.team_b_id,
         team_a_name: teamA?.name || "Team A",
         team_b_name: teamB?.name || "Team B",
         team_a_color: teamA?.color || "#6366f1",
         team_b_color: teamB?.color || "#ef4444",
         current_turn: (turnCount || 0) + 1,
-        status: m.status,
+        status: active.status,
         decision_deadline: null,
       });
     } else {
@@ -378,7 +401,10 @@ export default function TeamPage({
             turnsPerMatch={turnsPerMatch}
             decisionDeadline={activeMatch.decision_deadline}
             noiseChance={noiseChance}
+            matchIndex={matchIndex}
+            totalMatches={totalMatches}
             onTurnComplete={() => pollActiveMatch()}
+            onMatchComplete={() => pollActiveMatch()}
           />
         )}
         {tab === "match" && !activeMatch && isRunningMatches && (
