@@ -77,7 +77,21 @@ export async function POST(
   // Determine round number
   const nextRound = (season.current_round || 0) + 1;
 
-  // Guard against double-submit
+  // Guard: block if current round still has active matches
+  const { count: activeCount } = await supabase
+    .from("matches")
+    .select("id", { count: "exact", head: true })
+    .eq("season_id", parseInt(seasonId))
+    .in("status", ["pending", "talking", "deciding"]);
+
+  if (activeCount && activeCount > 0) {
+    return NextResponse.json(
+      { error: "Current round still has active matches" },
+      { status: 409 }
+    );
+  }
+
+  // Guard against double-submit for same round
   const { count: existingCount } = await supabase
     .from("matches")
     .select("id", { count: "exact", head: true })
