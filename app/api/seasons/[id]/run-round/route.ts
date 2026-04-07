@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 import { createServerClient } from "@/lib/supabase";
-import { getDoubleSwissMatchups } from "@/lib/engine/matchup";
+import { getRoundMatchups } from "@/lib/engine/matchup";
 import { executeNegotiation, refreshLeaderboard, type TeamData } from "@/lib/engine/executor";
 import { generateHighlights, generateTeamHighlights, getHighlightData, getTeamHighlightData } from "@/lib/engine/highlights";
 import { generateVoiceoversForHighlights } from "@/lib/engine/voiceover";
@@ -127,8 +127,8 @@ export async function POST(
     previousOpponents[m.team_b_id].add(m.team_a_id);
   }
 
-  // Generate double Swiss pairings (2 opponents per team per round)
-  const matchups = getDoubleSwissMatchups(sortedTeamIds, previousOpponents);
+  // Generate round matchups (equal matches per team)
+  const matchups = getRoundMatchups(sortedTeamIds, previousOpponents);
 
   // Create match records
   const matchInserts = matchups.map((m) => ({
