@@ -107,28 +107,36 @@ export async function POST(
   const rankMap: Record<string, number> = {};
   for (const row of leaderboard || []) rankMap[row.team_id] = row.rank;
 
-  // Sort teams by rank (best first, unranked last)
-  const sortedTeamIds = teams
-    .sort((a, b) => (rankMap[a.id] || 999) - (rankMap[b.id] || 999))
-    .map((t) => t.id);
+  // Same pairings every round within a season — so teams build history.
+  // Round 1: generate fresh pairings. Round 2+: reuse round 1's pairings.
+  let matchups: { teamAId: string; teamBId: string }[];
 
-  // Get previous opponents
-  const { data: prevMatches } = await supabase
-    .from("matches")
-    .select("team_a_id, team_b_id")
-    .eq("season_id", parseInt(seasonId))
-    .eq("status", "completed");
+  if (nextRound === 1) {
+    const sortedTeamIds = teams
+      .sort((a, b) => (rankMap[a.id] || 999) - (rankMap[b.id] || 999))
+      .map((t) => t.id);
 
-  const previousOpponents: Record<string, Set<string>> = {};
-  for (const m of prevMatches || []) {
-    if (!previousOpponents[m.team_a_id]) previousOpponents[m.team_a_id] = new Set();
-    if (!previousOpponents[m.team_b_id]) previousOpponents[m.team_b_id] = new Set();
-    previousOpponents[m.team_a_id].add(m.team_b_id);
-    previousOpponents[m.team_b_id].add(m.team_a_id);
+    matchups = getRoundMatchups(sortedTeamIds, {});
+  } else {
+    // Reuse round 1 pairings
+    const { data: round1Matches } = await supabase
+      .from("matches")
+      .select("team_a_id, team_b_id")
+      .eq("season_id", parseInt(seasonId))
+      .eq("round", 1)
+      .order("created_at", { ascending: true });
+
+    if (round1Matches && round1Matches.length > 0) {
+      matchups = round1Matches.map((m) => ({
+        teamAId: m.team_a_id,
+        teamBId: m.team_b_id,
+      }));
+    } else {
+      // Fallback: generate fresh
+      const sortedTeamIds = teams.map((t) => t.id);
+      matchups = getRoundMatchups(sortedTeamIds, {});
+    }
   }
-
-  // Generate round matchups (equal matches per team)
-  const matchups = getRoundMatchups(sortedTeamIds, previousOpponents);
 
   // Create match records
   const matchInserts = matchups.map((m) => ({
