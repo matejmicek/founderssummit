@@ -55,7 +55,19 @@ export default function DecisionPanel({
   const [revealCountdown, setRevealCountdown] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [previousTurns, setPreviousTurns] = useState<TurnResult[]>([]);
+  const [encounterHistory, setEncounterHistory] = useState<{
+    round: number;
+    myDecisions: string[];
+    theirDecisions: string[];
+    myScore: number;
+    theirScore: number;
+  }[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const audioRef = useRef<AudioContext | null>(null);
+
+  const isTeamA = teamId === teamAId;
+  const myName = isTeamA ? teamAName : teamBName;
+  const opponentName = isTeamA ? teamBName : teamAName;
 
   // Reset ALL state when matchId changes (switching to a different opponent)
   const prevMatchIdRef = useRef(matchId);
@@ -68,8 +80,38 @@ export default function DecisionPanel({
       setRevealCountdown(null);
       setSubmitting(false);
       setPreviousTurns([]);
+      setEncounterHistory([]);
+      setShowHistory(false);
     }
   }, [matchId]);
+
+  // Load encounter history with this opponent (from previous rounds)
+  useEffect(() => {
+    const opponentId = isTeamA ? teamBId : teamAId;
+    const supabase = createBrowserClient();
+    supabase
+      .from("encounter_history")
+      .select("round, my_score, their_score, turn_decisions")
+      .eq("team_id", teamId)
+      .eq("opponent_id", opponentId)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setEncounterHistory(
+            data.map((h) => {
+              const turns = (h.turn_decisions || []) as { my: string; their: string }[];
+              return {
+                round: h.round,
+                myDecisions: turns.map((t) => t.my),
+                theirDecisions: turns.map((t) => t.their),
+                myScore: h.my_score,
+                theirScore: h.their_score,
+              };
+            })
+          );
+        }
+      });
+  }, [matchId, teamId, teamAId, teamBId, isTeamA]);
 
   // Also reset decision state when currentTurn changes (next turn within same match)
   const prevTurnRef = useRef(currentTurn);
@@ -83,10 +125,6 @@ export default function DecisionPanel({
       setSubmitting(false);
     }
   }, [currentTurn]);
-
-  const isTeamA = teamId === teamAId;
-  const myName = isTeamA ? teamAName : teamBName;
-  const opponentName = isTeamA ? teamBName : teamAName;
 
   // Get messages for this match
   const { messages } = useRealtimeMessages(matchId);
@@ -367,6 +405,58 @@ export default function DecisionPanel({
         )}
 
       </div>
+
+      {/* Encounter history (previous rounds with this opponent) */}
+      {encounterHistory.length > 0 && (
+        <div className="card p-3">
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="w-full flex items-center justify-between text-xs font-bold text-[var(--muted)] uppercase tracking-widest font-mono"
+          >
+            <span>History vs {opponentName} ({encounterHistory.length} round{encounterHistory.length > 1 ? "s" : ""})</span>
+            <span className="text-[var(--accent)]">{showHistory ? "Hide" : "Show"}</span>
+          </button>
+
+          {showHistory && (
+            <div className="mt-3 space-y-2">
+              {encounterHistory.map((h, i) => (
+                <div key={i} className="flex items-center gap-3 text-xs">
+                  <span className="font-mono font-bold text-[var(--muted)] w-8 shrink-0">R{h.round}</span>
+                  <div className="flex gap-1">
+                    {h.myDecisions.map((d, j) => {
+                      const their = h.theirDecisions[j];
+                      return (
+                        <div key={j} className="text-center">
+                          <div className="flex gap-0.5">
+                            <span className={`font-bold ${d === "cooperate" ? "text-[var(--cooperate)]" : "text-[var(--betray)]"}`}>
+                              {d === "cooperate" ? "C" : "B"}
+                            </span>
+                            <span className="text-[var(--muted)]">/</span>
+                            <span className={`font-bold ${their === "cooperate" ? "text-[var(--cooperate)]" : "text-[var(--betray)]"}`}>
+                              {their === "cooperate" ? "C" : "B"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <span className="font-mono ml-auto tabular-nums">
+                    <span className={h.myScore >= h.theirScore ? "text-[var(--cooperate)] font-bold" : "text-[var(--muted)]"}>{h.myScore}</span>
+                    <span className="text-[var(--muted)]">-</span>
+                    <span className={h.theirScore >= h.myScore ? "text-[var(--betray)] font-bold" : "text-[var(--muted)]"}>{h.theirScore}</span>
+                  </span>
+                </div>
+              ))}
+              <div className="border-t border-[var(--border)] pt-1.5 flex justify-between text-xs font-mono">
+                <span className="text-[var(--muted)]">Total</span>
+                <span className="font-bold">
+                  {encounterHistory.reduce((s, h) => s + h.myScore, 0)}-{encounterHistory.reduce((s, h) => s + h.theirScore, 0)}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Negotiation transcript */}
       <div className="card p-4">
